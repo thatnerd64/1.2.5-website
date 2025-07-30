@@ -1,0 +1,35 @@
+{
+  "name": "minecraft-1.2.5-browser",
+  "version": "1.0.0",
+  "description": "Minecraft 1.2.5 with Forge running in the browser using CheerpJ",
+  "main": "index.html",
+  "scripts": {
+    "dev": "http-server -p 8080 -c-1",
+    "build": "echo 'Build process not implemented yet'",
+    "start": "npm run dev",
+    "test": "echo 'Tests not implemented yet'",
+    "test-cheerpj": "http-server -p 8081 -c-1"
+  },
+  "keywords": [
+    "minecraft",
+    "cheerpj",
+    "java",
+    "browser",
+    "forge",
+    "mods"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/minecraft-1.2.5-browser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/minecraft-1.2.5-browser/issues"
+  },
+  "homepage": "https://github.com/yourusername/minecraft-1.2.5-browser#readme"
+} 
