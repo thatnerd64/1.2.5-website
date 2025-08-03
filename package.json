@@ -6,9 +6,7 @@
   "scripts": {
     "dev": "http-server -p 8080 -c-1",
     "build": "echo 'Build process not implemented yet'",
-    "start": "npm run dev",
-    "test": "echo 'No tests specified'",
-    "test-cheerpj": "http-server -p 8081 -c-1"
+    "start": "npm run dev"
   },
   "keywords": [
     "minecraft",
