@@ -166,7 +166,9 @@
                 </p>
         </div>
 
-            <div id="play-section" class="hidden">
+        <div id="play-section" class="hidden">
+                <p>Enter a username to play offline:</p>
+                <input type="text" id="username" maxlength="16" placeholder="Player" />
                 <p>Clicking the button below will load the game from the local JAR file.</p>
                 <button id="play-button" onclick="startGame()">Play Minecraft!</button>
                     </div>
@@ -197,8 +199,13 @@
         const LWJGL_UTIL_JAR_PATH = "/files/lwjgl_util-2.9.3.jar";
         const JAR_LIBS = `${CHEERPJ_JAR_PATH}:${LWJGL_JAR_PATH}:${LWJGL_UTIL_JAR_PATH}`;
 
+        // URL parameters for testing/automation
+        const urlParams = new URLSearchParams(window.location.search);
+        const AUTO_START = urlParams.get('autostart') === '1';
+        const DEFAULT_USERNAME = urlParams.get('username') || `Player${Math.floor(Math.random()*1000)}`;
+
         // DOM elements
-        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection;
+        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput;
 
         // Initialize CheerpJ
         async function startCheerpJ() {
@@ -208,7 +215,7 @@
                 await cheerpjInit({
                     version: 8,
                     enableX11: true,
-                    javaProperties: ["java.library.path=/app/cheerpj-natives/natives"],
+                    javaProperties: ["java.library.path=/app/cheerpj-natives/natives","user.home=/files"],
                     preloadResources: {
                         "/lt/8/jre/lib/rt.jar": [0,131072,1310720,1572864,4456448,4849664,5111808,5505024,7995392,8126464,9699328,9830400,9961472,11534336,11665408,12189696,12320768,12582912,13238272,13369344,15073280,15335424,15466496,15597568,15990784,16121856,16252928,16384000,16777216,16908288,17039360,17563648,17694720,17825792,17956864,18087936,18219008,18612224,18743296,18874368,19005440,19136512,19398656,19791872,20054016,20709376,20840448,21757952,21889024,26869760],
                         "/lt/etc/users": [0,131072],
@@ -340,6 +347,24 @@
         }
 
         // Load all required JARs
+        async function loadMods() {
+            try {
+                const res = await fetch('/mods/');
+                if (!res.ok) {
+                    console.log('No mods directory found');
+                    return;
+                }
+                const text = await res.text();
+                const modFiles = [...text.matchAll(/href="([^\"]+\.jar)"/g)].map(m => m[1]);
+                for (const modFile of modFiles) {
+                    const name = modFile.split('/').pop();
+                    await loadJarToCheerpJ(`/mods/${name}`, `/files/.minecraft/mods/${name}`, `Mod ${name}`);
+                }
+            } catch (err) {
+                console.warn('Error loading mods:', err);
+            }
+        }
+
         async function loadAllJars() {
             console.log('Loading all JAR files...');
             showElement(progressContainer);
@@ -347,11 +372,14 @@
 
             // Load Minecraft JAR
             await loadJarToCheerpJ(LOCAL_JAR_PATH, CHEERPJ_JAR_PATH, "Minecraft");
-            
+
             // Load LWJGL JARs
             await loadJarToCheerpJ("/lib/lwjgl/lwjgl-2.9.3.jar", LWJGL_JAR_PATH, "LWJGL");
             await loadJarToCheerpJ("/lib/lwjgl/lwjgl_util-2.9.3.jar", LWJGL_UTIL_JAR_PATH, "LWJGL Util");
-            
+
+            // Load mods if any
+            await loadMods();
+
             console.log('All JARs loaded successfully');
         }
 
@@ -359,42 +387,31 @@
         async function startGame() {
             try {
                 console.log('Starting Minecraft...');
-                
+
                 // Load all JARs into CheerpJ filesystem
                 await loadAllJars();
-                
+
+                // Indicate loading finished for tests
+                window.gameLoaded = true;
+
                 // Give CheerpJ a moment to process the JAR files
                 console.log('Waiting for CheerpJ to process JAR files...');
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                
+
                 hideElement(progressContainer);
                 showElement(display);
 
                 console.log('Running Minecraft main class...');
                 console.log('JAR libs:', JAR_LIBS);
-                
+
                 // Set up LWJGL canvas for native library support
                 window.lwjglCanvasElement = document.getElementById('minecraft-canvas');
                 console.log('LWJGL canvas element set:', window.lwjglCanvasElement);
-                
-                try {
-                    console.log('Calling cheerpjRunMain...');
-                    // Try without arguments first, like Browsercraft does
-                    
-                    // Add a timeout to detect if cheerpjRunMain hangs
-                    const timeoutPromise = new Promise((_, reject) => {
-                        setTimeout(() => reject(new Error('cheerpjRunMain timed out after 30 seconds')), 30000);
-                    });
-                    
-                    const runPromise = cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS);
-                    
-                    const result = await Promise.race([runPromise, timeoutPromise]);
-                    console.log('cheerpjRunMain completed with result:', result);
-                } catch (runError) {
-                    console.error('cheerpjRunMain failed:', runError);
-                    throw new Error('Failed to run Minecraft main class: ' + runError.message);
-                }
-                
+
+                const username = (usernameInput.value || DEFAULT_USERNAME).trim();
+                console.log('Using username:', username);
+                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, username, "-");
+
             } catch (error) {
                 console.error('Failed to start game:', error);
                 showError('Failed to start game: ' + error.message);
@@ -441,12 +458,22 @@
             progressFill = document.getElementById('progress-fill');
             eulaCheckbox = document.getElementById('eula-accepted');
             playSection = document.getElementById('play-section');
+            usernameInput = document.getElementById('username');
+            if (usernameInput) {
+                usernameInput.value = DEFAULT_USERNAME;
+            }
 
             // Set up EULA checkbox handler
             eulaCheckbox.addEventListener('change', handleEulaChange);
 
             // Start CheerpJ initialization
             await startCheerpJ();
+
+            if (AUTO_START) {
+                eulaCheckbox.checked = true;
+                handleEulaChange();
+                startGame();
+            }
         });
     </script>
 
