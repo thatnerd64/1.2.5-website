@@ -20,14 +20,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Prepare static site
-        run: |
-          mkdir -p site
-          cp -r * site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: .
   deploy:
     runs-on: ubuntu-latest
     needs: build
