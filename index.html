@@ -169,6 +169,9 @@
         <div id="play-section" class="hidden">
                 <p>Enter a username to play offline:</p>
                 <input type="text" id="username" maxlength="16" placeholder="Player" />
+                <p class="text-center">Optional multiplayer server:</p>
+                <input type="text" id="server" placeholder="server address" />
+                <input type="text" id="port" placeholder="port" value="25565" />
                 <p>Clicking the button below will load the game from the local JAR file.</p>
                 <button id="play-button" onclick="startGame()">Play Minecraft!</button>
                     </div>
@@ -192,8 +195,9 @@
     </div>
 
     <script>
-        // Minecraft JAR configuration - matching Browsercraft's approach
-        const LOCAL_JAR_PATH = "/lib/minecraft-1.2.5.jar";
+        // Minecraft JAR configuration - mirror typical .minecraft layout
+        const MINECRAFT_DIR = "/files/.minecraft";
+        const LOCAL_JAR_PATH = "/lib/lwjgl/minecraft-1.2.5.jar";
         const CHEERPJ_JAR_PATH = "/files/client_1.2.5.jar";
         const LWJGL_JAR_PATH = "/files/lwjgl-2.9.3.jar";
         const LWJGL_UTIL_JAR_PATH = "/files/lwjgl_util-2.9.3.jar";
@@ -203,9 +207,11 @@
         const urlParams = new URLSearchParams(window.location.search);
         const AUTO_START = urlParams.get('autostart') === '1';
         const DEFAULT_USERNAME = urlParams.get('username') || `Player${Math.floor(Math.random()*1000)}`;
+        const DEFAULT_SERVER = urlParams.get('server') || '';
+        const DEFAULT_PORT = urlParams.get('port') || '25565';
 
         // DOM elements
-        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput;
+        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput, serverInput, portInput;
 
         // Initialize CheerpJ
         async function startCheerpJ() {
@@ -383,6 +389,22 @@
             console.log('All JARs loaded successfully');
         }
 
+        function buildLaunchArgs() {
+            const username = (usernameInput.value || DEFAULT_USERNAME).trim();
+            const host = (serverInput && serverInput.value.trim()) || '';
+            const port = (portInput && portInput.value.trim()) || '25565';
+            const args = [username, "-"];
+            if (host) {
+                args.push(host);
+                args.push(port);
+            }
+            console.log('Using username:', username);
+            if (host) {
+                console.log('Connecting to server:', host + ':' + port);
+            }
+            return args;
+        }
+
         // Start the game
         async function startGame() {
             try {
@@ -407,10 +429,8 @@
                 // Set up LWJGL canvas for native library support
                 window.lwjglCanvasElement = document.getElementById('minecraft-canvas');
                 console.log('LWJGL canvas element set:', window.lwjglCanvasElement);
-
-                const username = (usernameInput.value || DEFAULT_USERNAME).trim();
-                console.log('Using username:', username);
-                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, username, "-");
+                const launchArgs = buildLaunchArgs();
+                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, ...launchArgs);
 
             } catch (error) {
                 console.error('Failed to start game:', error);
@@ -459,8 +479,16 @@
             eulaCheckbox = document.getElementById('eula-accepted');
             playSection = document.getElementById('play-section');
             usernameInput = document.getElementById('username');
+            serverInput = document.getElementById('server');
+            portInput = document.getElementById('port');
             if (usernameInput) {
                 usernameInput.value = DEFAULT_USERNAME;
+            }
+            if (serverInput && DEFAULT_SERVER) {
+                serverInput.value = DEFAULT_SERVER;
+            }
+            if (portInput && DEFAULT_PORT) {
+                portInput.value = DEFAULT_PORT;
             }
 
             // Set up EULA checkbox handler

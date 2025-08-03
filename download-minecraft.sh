@@ -8,11 +8,11 @@ echo "================================"
 echo ""
 
 # Create lib directory if it doesn't exist
-mkdir -p lib
+mkdir -p lib/lwjgl
 
 # Minecraft 1.2.5 JAR URL (official Mojang server)
 MINECRAFT_URL="https://piston-data.mojang.com/v1/objects/4a2fac7504182a97dcbcd7560c6392d7c8139928/client.jar"
-JAR_FILE="lib/minecraft-1.2.5.jar"
+JAR_FILE="lib/lwjgl/minecraft-1.2.5.jar"
 
 echo "Downloading Minecraft 1.2.5 client JAR..."
 echo "URL: $MINECRAFT_URL"

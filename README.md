@@ -13,6 +13,8 @@ This is a simplified implementation inspired by [Browsercraft](https://github.co
 - **Mod Support**: Place Forge-compatible mods in the `/mods` folder
 - **Simple Setup**: Just download the JAR and run
 - **Browser-based**: No Java installation required
+- **Offline Mode**: Uses an embedded `.minecraft` directory to avoid external downloads
+- **Custom Multiplayer**: Connect to servers with any username without online authentication
 
 ## Notes
 
@@ -43,7 +45,7 @@ This is not an official Minecraft product. It is not approved by or associated w
    ./download-minecraft.sh
    ```
    
-   Or manually download the Minecraft 1.2.5 client JAR and place it as `lib/minecraft-1.2.5.jar`
+   Or manually download the Minecraft 1.2.5 client JAR and place it as `lib/lwjgl/minecraft-1.2.5.jar`
 
 4. **Start the development server**
    ```bash
@@ -55,6 +57,7 @@ This is not an official Minecraft product. It is not approved by or associated w
 
 6. **Play Minecraft**
    - Accept the Minecraft EULA
+   - (Optional) Enter a server address and port to join multiplayer
    - Click "Play Minecraft!" to start the game
 
 ## JAR File Setup
@@ -69,11 +72,11 @@ Run the provided script to download the official JAR:
 
 ### Manual Setup
 1. Download the Minecraft 1.2.5 client JAR from a legal source
-2. Place it in the `lib/` folder
+2. Place it in the `lib/lwjgl/` folder
 3. Rename it to `minecraft-1.2.5.jar`
 
 ### JAR File Location
-- **Path**: `lib/minecraft-1.2.5.jar`
+- **Path**: `lib/lwjgl/minecraft-1.2.5.jar`
 - **Size**: Approximately 4-5 MB
 - **Source**: Official Mojang servers (via download script)
 
@@ -109,11 +112,11 @@ This project uses [CheerpJ](https://cheerpj.com), a Java-to-JavaScript compiler 
 
 ### Technical Details
 
-The application uses CheerpJ's virtual filesystem to store and run the JAR file. The LWJGL libraries are provided by CheerpJ internally at `/app/lwjgl/`. The process is:
+The application uses CheerpJ's virtual filesystem to store and run the JAR file. The LWJGL libraries are stored alongside the client in the CheerpJ filesystem. The process is:
 
-1. The JAR file is loaded from `/lib/minecraft-1.2.5.jar` on the web server
+1. The JAR file is loaded from `/lib/lwjgl/minecraft-1.2.5.jar` on the web server
 2. It's written to `/files/client_1.2.5.jar` in CheerpJ's virtual filesystem
-3. CheerpJ runs Minecraft with the classpath: `/app/lwjgl/lwjgl-2.9.3.jar:/app/lwjgl/lwjgl_util-2.9.3.jar:/files/client_1.2.5.jar`
+3. CheerpJ runs Minecraft with the classpath: `/files/client_1.2.5.jar:/files/lwjgl-2.9.3.jar:/files/lwjgl_util-2.9.3.jar`
 
 ## File Structure
 
@@ -122,7 +125,7 @@ minecraft-1.2.5/
 ├── index.html              # Main application
 ├── download-minecraft.sh   # Script to download JAR file
 ├── lib/                    # JAR files directory
-│   └── minecraft-1.2.5.jar # Minecraft client JAR (download required)
+│   └── lwjgl/minecraft-1.2.5.jar # Minecraft client JAR (download required)
 ├── mods/                   # Place your mod JAR files here
 │   └── README.md          # Instructions for adding mods
 ├── package.json           # Node.js dependencies
@@ -135,7 +138,7 @@ minecraft-1.2.5/
 
 **JAR File Not Found**
 - Run `./download-minecraft.sh` to download the JAR file
-- Ensure the file exists at `lib/minecraft-1.2.5.jar`
+- Ensure the file exists at `lib/lwjgl/minecraft-1.2.5.jar`
 - Check file permissions
 
 **CheerpJ Loading Fails**
