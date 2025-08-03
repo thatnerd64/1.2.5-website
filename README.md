@@ -95,7 +95,7 @@ To add mods to your Minecraft installation:
 This project uses [CheerpJ](https://cheerpj.com), a Java-to-JavaScript compiler that allows Java applications to run in the browser. The implementation:
 
 1. **Loads Local JAR**: Fetches the Minecraft 1.2.5 client JAR from the local `minecraft/bin/` folder
-2. **Virtual Filesystem**: Writes the JAR into CheerpJ's virtual filesystem at `/files/.minecraft/bin/minecraft-1.2.5.jar`
+2. **Virtual Filesystem**: Writes the JAR into CheerpJ's virtual filesystem at `/app/.minecraft/bin/minecraft-1.2.5.jar`
 3. **Initializes CheerpJ**: Sets up the Java runtime environment in the browser
 4. **Runs Minecraft**: Executes the unmodified Minecraft client JAR with LWJGL libraries
 5. **Loads Mods**: Automatically loads any mods placed in the `/minecraft/mods` folder
@@ -105,8 +105,8 @@ This project uses [CheerpJ](https://cheerpj.com), a Java-to-JavaScript compiler 
 The application uses CheerpJ's virtual filesystem to store and run the JAR file. The LWJGL libraries are stored alongside the client in the CheerpJ filesystem. The process is:
 
 1. The JAR file is loaded from `/minecraft/bin/minecraft-1.2.5.jar` on the web server
-2. It's written to `/files/.minecraft/bin/minecraft-1.2.5.jar` in CheerpJ's virtual filesystem
-3. CheerpJ runs Minecraft with the classpath: `/files/.minecraft/bin/minecraft-1.2.5.jar:/files/lwjgl-2.9.3.jar:/files/lwjgl_util-2.9.3.jar`
+2. It's written to `/app/.minecraft/bin/minecraft-1.2.5.jar` in CheerpJ's virtual filesystem
+3. CheerpJ runs Minecraft with the classpath: `/app/.minecraft/bin/minecraft-1.2.5.jar:/app/lwjgl-2.9.3.jar:/app/lwjgl_util-2.9.3.jar`
 
 ## File Structure
 
