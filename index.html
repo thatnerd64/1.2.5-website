@@ -197,7 +197,7 @@
     <script>
         // Minecraft JAR configuration - store game files in writable CheerpJ /files directory
         const MINECRAFT_DIR = "/files/.minecraft";
-        const LOCAL_MINECRAFT_DIR = "/minecraft";
+        const LOCAL_MINECRAFT_DIR = "./minecraft";
         const LOCAL_JAR_PATH = `${LOCAL_MINECRAFT_DIR}/bin/minecraft-1.2.5.jar`;
         const CHEERPJ_JAR_PATH = `${MINECRAFT_DIR}/bin/minecraft-1.2.5.jar`;
         const LWJGL_JAR_PATH = "/files/lwjgl-2.9.3.jar";
@@ -404,8 +404,8 @@
             await loadJarToCheerpJ(LOCAL_JAR_PATH, CHEERPJ_JAR_PATH, "Minecraft");
 
             // Load LWJGL JARs
-            await loadJarToCheerpJ("/lib/lwjgl/lwjgl-2.9.3.jar", LWJGL_JAR_PATH, "LWJGL");
-            await loadJarToCheerpJ("/lib/lwjgl/lwjgl_util-2.9.3.jar", LWJGL_UTIL_JAR_PATH, "LWJGL Util");
+            await loadJarToCheerpJ("./lib/lwjgl/lwjgl-2.9.3.jar", LWJGL_JAR_PATH, "LWJGL");
+            await loadJarToCheerpJ("./lib/lwjgl/lwjgl_util-2.9.3.jar", LWJGL_UTIL_JAR_PATH, "LWJGL Util");
 
             // Load mods if any
             await loadMods();

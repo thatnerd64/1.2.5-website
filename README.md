@@ -10,7 +10,7 @@ This is a simplified implementation inspired by [Browsercraft](https://github.co
 
 - **Unmodified Minecraft 1.2.5**: Runs the original Minecraft client JAR untouched
 - **Local JAR Storage**: Uses a local JAR file for faster loading
-- **Mod Support**: Place Forge-compatible mods in the `/minecraft/mods` folder
+- **Mod Support**: Place Forge-compatible mods in the `minecraft/mods` folder
 - **Simple Setup**: Just download the JAR and run
 - **Browser-based**: No Java installation required
 - **Offline Mode**: Uses an embedded `.minecraft` directory to avoid external downloads
@@ -80,7 +80,7 @@ To add mods to your Minecraft installation:
    ```
 
 2. **Add mod JAR files**:
-   Place any Forge-compatible mod JAR files for Minecraft 1.2.5 in the `/minecraft/mods` folder.
+   Place any Forge-compatible mod JAR files for Minecraft 1.2.5 in the `minecraft/mods` folder.
 
 3. **Restart the game**:
    The mods will be loaded automatically when you start Minecraft.
@@ -88,7 +88,7 @@ To add mods to your Minecraft installation:
 ### Supported Mods
 - Any Forge-compatible mods for Minecraft 1.2.5
 - Mods should be in JAR format
-- Place them directly in the `/minecraft/mods` folder
+- Place them directly in the `minecraft/mods` folder
 
 ## How it Works
 
@@ -98,13 +98,13 @@ This project uses [CheerpJ](https://cheerpj.com), a Java-to-JavaScript compiler 
 2. **Virtual Filesystem**: Writes the JAR into CheerpJ's virtual filesystem at `/app/.minecraft/bin/minecraft-1.2.5.jar`
 3. **Initializes CheerpJ**: Sets up the Java runtime environment in the browser
 4. **Runs Minecraft**: Executes the unmodified Minecraft client JAR with LWJGL libraries
-5. **Loads Mods**: Automatically loads any mods placed in the `/minecraft/mods` folder
+5. **Loads Mods**: Automatically loads any mods placed in the `minecraft/mods` folder
 
 ### Technical Details
 
 The application uses CheerpJ's virtual filesystem to store and run the JAR file. The LWJGL libraries are stored alongside the client in the CheerpJ filesystem. The process is:
 
-1. The JAR file is loaded from `/minecraft/bin/minecraft-1.2.5.jar` on the web server
+1. The JAR file is loaded from `minecraft/bin/minecraft-1.2.5.jar` on the web server
 2. It's written to `/app/.minecraft/bin/minecraft-1.2.5.jar` in CheerpJ's virtual filesystem
 3. CheerpJ runs Minecraft with the classpath: `/app/.minecraft/bin/minecraft-1.2.5.jar:/app/lwjgl-2.9.3.jar:/app/lwjgl_util-2.9.3.jar`
 
@@ -149,7 +149,7 @@ minecraft-1.2.5/
 **Mods Not Loading**
 - Verify mods are compatible with Minecraft 1.2.5
 - Ensure mods are in JAR format
-- Check that mods are placed directly in the `/minecraft/mods` folder
+- Check that mods are placed directly in the `minecraft/mods` folder
 
 **Performance Issues**
 - Close other browser tabs
