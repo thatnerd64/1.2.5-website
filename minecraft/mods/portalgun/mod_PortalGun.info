@@ -1,0 +1,21 @@
+[
+{
+  "modid" : "mod_PortalGun",
+  "name" : "Portal Gun",
+  "version" : "1.2.5v3",
+  "url" : "http://www.minecraftforum.net/topic/199391-/",
+  "credits" : "",
+  "authors": [
+    "iChun"
+  ],
+  "description": "Add the portal gun and many other portal elements into Minecraft. Now working for SMP!",
+  "logoFile" : "portal_logo.png",
+  "updateUrl" : "",
+  "parent" : "",
+  "screenshots": [
+  ],
+  "dependancies": [
+    "mod_MinecraftForge"
+  ]
+}
+]

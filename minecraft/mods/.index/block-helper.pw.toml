@@ -1,0 +1,16 @@
+filename = 'BlockHelper-1.1.1-1.2.5-client.jar'
+name = 'Block Helper'
+side = 'both'
+x-prismlauncher-loaders = [ 'forge' ]
+x-prismlauncher-mc-versions = [ '1.2.4', '1.2.5' ]
+x-prismlauncher-release-type = 'release'
+
+[download]
+hash = 'cd367ff0afc0ab40a118e37fb6bfaa23a08f1b3e'
+hash-format = 'sha1'
+mode = 'metadata:curseforge'
+url = ''
+
+[update.curseforge]
+file-id = 3732137
+project-id = 251766

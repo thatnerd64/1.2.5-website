@@ -1,0 +1,14 @@
+Menu Key: Numpad4
+Toggle Enable: None
+Toggle Render Type: None
+Toggle Zoom: Add
+Toggle Large Map: Numpad5
+Toggle Large Map Label: None
+Toggle Waypoints Visible: None
+Toggle Waypoints Marker: None
+Toggle Waypoints Dimension: None
+Toggle Entities Radar: None
+Set Waypoint: Numpad8
+Waypoint List: None
+Zoom In: None
+Zoom Out: None

@@ -1,0 +1,7 @@
+[2025.08.01 09:24:09]: Modifying RenderManager Entity Map
+[2025.08.01 09:24:09]: Modifying TileEntityRenderer Map
+[2025.08.01 09:24:09]: Myst SymLoader: Adding Packets
+[2025.08.01 09:24:09]: Modifying EntityList
+[2025.08.01 09:24:09]: Succeeded in modifing EntityList
+[2025.08.01 09:24:09]: Modifying TileEntity List
+[2025.08.01 09:24:09]: Succeeded in modifing TileEntity List

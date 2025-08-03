@@ -1,0 +1,49 @@
+music:0.14084508
+sound:0.21830986
+invertYMouse:false
+mouseSensitivity:0.36619717
+fov:1.0
+gamma:1.0
+viewDistance:0
+guiScale:3
+particles:0
+bobView:true
+anaglyph3d:false
+advancedOpengl:true
+fpsLimit:0
+difficulty:2
+fancyGraphics:true
+ao:true
+clouds:true
+skin:Modern Textures 1.0.1.zip
+lastServer:
+lang:en_US
+key_key.attack:-100
+key_key.use:-99
+key_key.forward:17
+key_key.left:30
+key_key.back:31
+key_key.right:32
+key_key.jump:57
+key_key.sneak:42
+key_key.drop:16
+key_key.inventory:18
+key_key.chat:20
+key_key.playerlist:15
+key_key.pickItem:-98
+key_key.craftpresence.config_keycode.name:41
+key_ALT Key:56
+key_Boost Key:0
+key_Mode Switch Key:50
+key_blockhelper.key_show_hide:82
+key_Charge Item:47
+key_Toggle Active:34
+key_Extra Function:46
+key_Release Charge:19
+key_Sort inventory:43
+key_Sprint:29
+key_Fly:33
+key_Railcraft Anchor Aura:88
+key_laserKeyBinding:88
+key_Gravi Fly Key:33
+key_Show force-loaded chunks:88

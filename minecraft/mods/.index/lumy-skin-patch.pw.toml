@@ -1,0 +1,16 @@
+filename = 'LumySkinPatch-for-MC-1.2.5-1.0.12.jar'
+name = 'Lumy Skin Patch'
+side = 'both'
+x-prismlauncher-loaders = [ 'forge' ]
+x-prismlauncher-mc-versions = [ '1.2.5' ]
+x-prismlauncher-release-type = 'release'
+
+[download]
+hash = 'ea96d81a7b4b366db982dda5a8e352fcfa7a2c10'
+hash-format = 'sha1'
+mode = 'metadata:curseforge'
+url = ''
+
+[update.curseforge]
+file-id = 4000512
+project-id = 288957

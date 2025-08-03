@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 1.2.5 Browser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Minecraft', Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-container {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .intro {
+            text-align: center;
+            max-width: 600px;
+            padding: 20px;
+        }
+
+        .intro p {
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .intro button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+        }
+
+        .intro button:hover {
+            background: #45a049;
+        }
+
+        .intro button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .disclaimer {
+            font-size: 12px;
+            color: #888;
+            margin-top: 30px;
+            padding: 15px;
+            border-top: 1px solid #333;
+        }
+
+        .display {
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            max-width: 400px;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .mods-info {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+
+        .mods-info h3 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+
+        .error-message {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="loading" class="loading-container">
+            <div class="spinner"></div>
+            <p class="text-center">Loading CheerpJ...</p>
+        </div>
+
+        <div id="intro" class="intro hidden">
+            <h1>Minecraft 1.2.5 Browser</h1>
+            <p>
+                This is a proof-of-concept demo of Minecraft 1.2.5 running unmodified in the browser using CheerpJ.
+            </p>
+
+            <div class="mods-info">
+                <h3>Mod Support</h3>
+                <p>Place your mod JAR files in the <code>/mods</code> folder to load them automatically.</p>
+                <p>Supported mods: Any Forge-compatible mods for Minecraft 1.2.5</p>
+                </div>
+                
+            <div id="eula-section">
+                <p>
+                    <input type="checkbox" id="eula-accepted" />
+                    <label for="eula-accepted">
+                        I accept the <a href="https://www.minecraft.net/eula" target="_blank">Minecraft EULA</a>
+                    </label>
+                </p>
+        </div>
+
+        <div id="play-section" class="hidden">
+                <p>Enter a username to play offline:</p>
+                <input type="text" id="username" maxlength="16" placeholder="Player" />
+                <p class="text-center">Optional multiplayer server:</p>
+                <input type="text" id="server" placeholder="server address" />
+                <input type="text" id="port" placeholder="port" value="25565" />
+                <p>Clicking the button below will load the game from the local JAR file.</p>
+                <button id="play-button" onclick="startGame()">Play Minecraft!</button>
+                    </div>
+                    
+            <div class="disclaimer">
+                This is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft.
+                You must have a legal copy of Minecraft 1.2.5 to use this application.
+            </div>
+        </div>
+
+        <div id="progress-container" class="hidden">
+            <p>Loading Minecraft JAR...</p>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+        </div>
+
+        <div id="display" class="display">
+            <canvas id="minecraft-canvas" width="854" height="480"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Minecraft JAR configuration - mirror typical .minecraft layout and use core minecraft folder
+        const MINECRAFT_DIR = "/files/.minecraft";
+        const LOCAL_MINECRAFT_DIR = "/minecraft";
+        const LOCAL_JAR_PATH = `${LOCAL_MINECRAFT_DIR}/bin/minecraft-1.2.5.jar`;
+        const CHEERPJ_JAR_PATH = `${MINECRAFT_DIR}/bin/minecraft-1.2.5.jar`;
+        const LWJGL_JAR_PATH = "/files/lwjgl-2.9.3.jar";
+        const LWJGL_UTIL_JAR_PATH = "/files/lwjgl_util-2.9.3.jar";
+        const JAR_LIBS = `${CHEERPJ_JAR_PATH}:${LWJGL_JAR_PATH}:${LWJGL_UTIL_JAR_PATH}`;
+
+        // URL parameters for testing/automation
+        const urlParams = new URLSearchParams(window.location.search);
+        const AUTO_START = urlParams.get('autostart') === '1';
+        const DEFAULT_USERNAME = urlParams.get('username') || `Player${Math.floor(Math.random()*1000)}`;
+        const DEFAULT_SERVER = urlParams.get('server') || '';
+        const DEFAULT_PORT = urlParams.get('port') || '25565';
+
+        // DOM elements
+        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput, serverInput, portInput;
+
+        // Initialize CheerpJ
+        async function startCheerpJ() {
+            try {
+                console.log('Initializing CheerpJ...');
+                
+                await cheerpjInit({
+                    version: 8,
+                    enableX11: true,
+                    javaProperties: ["java.library.path=/app/cheerpj-natives/natives","user.home=/files"],
+                    preloadResources: {
+                        "/lt/8/jre/lib/rt.jar": [0,131072,1310720,1572864,4456448,4849664,5111808,5505024,7995392,8126464,9699328,9830400,9961472,11534336,11665408,12189696,12320768,12582912,13238272,13369344,15073280,15335424,15466496,15597568,15990784,16121856,16252928,16384000,16777216,16908288,17039360,17563648,17694720,17825792,17956864,18087936,18219008,18612224,18743296,18874368,19005440,19136512,19398656,19791872,20054016,20709376,20840448,21757952,21889024,26869760],
+                        "/lt/etc/users": [0,131072],
+                        "/lt/etc/localtime": [],
+                        "/lt/8/jre/lib/cheerpj-awt.jar": [0,131072],
+                        "/lt/8/lib/ext/meta-index": [0,131072],
+                        "/lt/8/lib/ext": [],
+                        "/lt/8/lib/ext/index.list": [],
+                        "/lt/8/lib/ext/localedata.jar": [],
+                        "/lt/8/jre/lib/jsse.jar": [0,131072,786432,917504],
+                        "/lt/8/jre/lib/jce.jar": [0,131072],
+                        "/lt/8/jre/lib/charsets.jar": [0,131072,1703936,1835008],
+                        "/lt/8/jre/lib/resources.jar": [0,131072,917504,1179648],
+                        "/lt/8/jre/lib/javaws.jar": [0,131072,1441792,1703936],
+                        "/lt/8/lib/ext/sunjce_provider.jar": [],
+                        "/lt/8/lib/security/java.security": [0,131072],
+                        "/lt/8/jre/lib/meta-index": [0,131072],
+                        "/lt/8/jre/lib": [],
+                        "/lt/8/lib/accessibility.properties": [],
+                        "/lt/8/lib/fonts/LucidaSansRegular.ttf": [],
+                        "/lt/8/lib/currency.data": [0,131072],
+                        "/lt/8/lib/currency.properties": [0,131072],
+                        "/lt/libraries/libGLESv2.so.1": [0,262144],
+                        "/lt/libraries/libEGL.so.1": [0,262144],
+                        "/lt/8/lib/fonts/badfonts.txt": [],
+                        "/lt/8/lib/fonts": [],
+                        "/lt/etc/hosts": [],
+                        "/lt/etc/resolv.conf": [0,131072],
+                        "/lt/8/lib/fonts/fallback": [],
+                        "/lt/fc/fonts/fonts.conf": [0,131072],
+                        "/lt/fc/ttf": [],
+                        "/lt/fc/cache/e21edda6a7db77f35ca341e0c3cb2a22-le32d8.cache-7": [0,131072],
+                        "/lt/fc/ttf/LiberationSans-Regular.ttf": [0,131072,262144,393216],
+                        "/lt/8/lib/jaxp.properties": [],
+                        "/lt/etc/timezone": [],
+                        "/lt/8/lib/tzdb.dat": [0,131072]
+                    }
+                });
+
+                await cheerpjCreateDisplay(-1, -1, display);
+                
+                console.log('CheerpJ initialized successfully');
+                hideElement(loading);
+                showElement(intro);
+                
+            } catch (error) {
+                console.error('Failed to initialize CheerpJ:', error);
+                showError('Failed to initialize CheerpJ: ' + error.message);
+            }
+        }
+
+        // Load a JAR file into CheerpJ filesystem
+        async function loadJarToCheerpJ(localPath, cheerpjPath, jarName) {
+            try {
+                console.log(`Loading ${jarName} from local server...`);
+
+                const response = await fetch(localPath);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${jarName}: ${response.status}`);
+                }
+
+                let bytes;
+                try {
+                    // Use arrayBuffer if Content-Length header is missing or incorrect
+                    const buffer = await response.arrayBuffer();
+                    bytes = new Uint8Array(buffer);
+                } catch (e) {
+                    // Fallback to streaming in chunks if arrayBuffer fails
+                    const reader = response.body.getReader();
+                    const contentLengthHeader = response.headers.get('Content-Length');
+                    const totalSize = contentLengthHeader ? +contentLengthHeader : null;
+                    const chunks = [];
+                    let loaded = 0;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        loaded += value.length;
+                        if (totalSize) {
+                            const progress = (loaded / totalSize) * 100;
+                            progressFill.style.width = progress + '%';
+                        }
+                    }
+                    bytes = new Uint8Array(loaded);
+                    let offset = 0;
+                    for (const chunk of chunks) {
+                        bytes.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+                }
+                console.log(`${jarName} loaded successfully, total bytes:`, bytes.length);
+
+                console.log(`Writing ${jarName} to CheerpJ filesystem...`);
+                console.log('JAR size:', bytes.length, 'bytes');
+                console.log('Target path:', cheerpjPath);
+
+                // Ensure target directory exists in CheerpJ filesystem.
+                const dirPath = cheerpjPath.substring(0, cheerpjPath.lastIndexOf('/'));
+                const dirSegments = dirPath.split('/');
+                let accumulatedPath = '';
+                for (const segment of dirSegments) {
+                    if (!segment) continue;
+                    accumulatedPath += '/' + segment;
+                    await new Promise((resolve, reject) => {
+                        const fileRef = {};
+                        cheerpOSCreateDir(accumulatedPath, fileRef, 0o777, () => {
+                            if (fileRef.exists !== 5) {
+                                reject(new Error('Failed to create directory in CheerpJ filesystem: ' + accumulatedPath));
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                }
+                
+                // Write to CheerpJ filesystem - this is the key part!
+                return new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('CheerpJ filesystem operations timed out after 10 seconds'));
+                    }, 10000);
+                    
+                    var fds = [];
+                    console.log('Calling cheerpOSOpen...');
+                    
+                    cheerpOSOpen(fds, cheerpjPath, "w", fd => {
+                        console.log('cheerpOSOpen callback called with fd:', fd);
+                        
+                        if (fd < 0) {
+                            clearTimeout(timeout);
+                            reject(new Error('Failed to open file in CheerpJ filesystem, fd: ' + fd));
+                            return;
+                        }
+                        
+                        console.log('Calling cheerpOSWrite...');
+                        cheerpOSWrite(fds, fd, bytes, 0, bytes.length, w => {
+                            console.log('cheerpOSWrite callback called with bytes written:', w);
+                            
+                            if (w < 0) {
+                                clearTimeout(timeout);
+                                reject(new Error('Failed to write to CheerpJ filesystem, written: ' + w));
+                                return;
+                            }
+                            
+                            console.log('Calling cheerpOSClose...');
+                            cheerpOSClose(fds, fd);
+                            
+                            // Don't wait for close callback, just resolve immediately
+                            clearTimeout(timeout);
+                            console.log(`${jarName} written to CheerpJ filesystem successfully`);
+                            resolve();
+                        });
+                    });
+                });
+
+            } catch (error) {
+                console.error(`Failed to load ${jarName}:`, error);
+                throw error;
+            }
+        }
+
+        // Load all required JARs
+        async function loadMods() {
+            try {
+                const res = await fetch(`${LOCAL_MINECRAFT_DIR}/mods/`);
+                if (!res.ok) {
+                    console.log('No mods directory found');
+                    return;
+                }
+                const text = await res.text();
+                const modFiles = [...text.matchAll(/href="([^\"]+\.jar)"/g)].map(m => m[1]);
+                for (const modFile of modFiles) {
+                    const name = modFile.split('/').pop();
+                    await loadJarToCheerpJ(`${LOCAL_MINECRAFT_DIR}/mods/${name}`, `${MINECRAFT_DIR}/mods/${name}`, `Mod ${name}`);
+                }
+            } catch (err) {
+                console.warn('Error loading mods:', err);
+            }
+        }
+
+        async function loadAllJars() {
+            console.log('Loading all JAR files...');
+            showElement(progressContainer);
+            hideElement(intro);
+
+            // Load Minecraft JAR from core minecraft folder
+            await loadJarToCheerpJ(LOCAL_JAR_PATH, CHEERPJ_JAR_PATH, "Minecraft");
+
+            // Load LWJGL JARs
+            await loadJarToCheerpJ("/lib/lwjgl/lwjgl-2.9.3.jar", LWJGL_JAR_PATH, "LWJGL");
+            await loadJarToCheerpJ("/lib/lwjgl/lwjgl_util-2.9.3.jar", LWJGL_UTIL_JAR_PATH, "LWJGL Util");
+
+            // Load mods if any
+            await loadMods();
+
+            console.log('All JARs loaded successfully');
+        }
+
+        function buildLaunchArgs() {
+            const username = (usernameInput.value || DEFAULT_USERNAME).trim();
+            const host = (serverInput && serverInput.value.trim()) || '';
+            const port = (portInput && portInput.value.trim()) || '25565';
+            const args = [username, "-"];
+            if (host) {
+                args.push(host);
+                args.push(port);
+            }
+            console.log('Using username:', username);
+            if (host) {
+                console.log('Connecting to server:', host + ':' + port);
+            }
+            return args;
+        }
+
+        // Start the game
+        async function startGame() {
+            try {
+                console.log('Starting Minecraft...');
+
+                // Load all JARs into CheerpJ filesystem
+                await loadAllJars();
+
+                // Indicate loading finished for tests
+                window.gameLoaded = true;
+
+                // Give CheerpJ a moment to process the JAR files
+                console.log('Waiting for CheerpJ to process JAR files...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                hideElement(progressContainer);
+                showElement(display);
+
+                console.log('Running Minecraft main class...');
+                console.log('JAR libs:', JAR_LIBS);
+
+                // Set up LWJGL canvas for native library support
+                window.lwjglCanvasElement = document.getElementById('minecraft-canvas');
+                console.log('LWJGL canvas element set:', window.lwjglCanvasElement);
+                const launchArgs = buildLaunchArgs();
+                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, ...launchArgs);
+
+            } catch (error) {
+                console.error('Failed to start game:', error);
+                showError('Failed to start game: ' + error.message);
+                hideElement(progressContainer);
+                hideElement(display);
+                showElement(intro);
+            }
+        }
+
+        // Utility functions
+        function showElement(element) {
+            element.classList.remove('hidden');
+        }
+
+        function hideElement(element) {
+            element.classList.add('hidden');
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            
+            const intro = document.getElementById('intro');
+            intro.insertBefore(errorDiv, intro.firstChild);
+        }
+
+        // EULA checkbox handler
+        function handleEulaChange() {
+            if (eulaCheckbox.checked) {
+                showElement(playSection);
+            } else {
+                hideElement(playSection);
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Get DOM elements
+            loading = document.getElementById('loading');
+            intro = document.getElementById('intro');
+            display = document.getElementById('display');
+            progressContainer = document.getElementById('progress-container');
+            progressFill = document.getElementById('progress-fill');
+            eulaCheckbox = document.getElementById('eula-accepted');
+            playSection = document.getElementById('play-section');
+            usernameInput = document.getElementById('username');
+            serverInput = document.getElementById('server');
+            portInput = document.getElementById('port');
+            if (usernameInput) {
+                usernameInput.value = DEFAULT_USERNAME;
+            }
+            if (serverInput && DEFAULT_SERVER) {
+                serverInput.value = DEFAULT_SERVER;
+            }
+            if (portInput && DEFAULT_PORT) {
+                portInput.value = DEFAULT_PORT;
+            }
+
+            // Set up EULA checkbox handler
+            eulaCheckbox.addEventListener('change', handleEulaChange);
+
+            // Start CheerpJ initialization
+            await startCheerpJ();
+
+            if (AUTO_START) {
+                eulaCheckbox.checked = true;
+                handleEulaChange();
+                startGame();
+            }
+        });
+    </script>
+
+    <!-- Load CheerpJ -->
+    <script src="https://cjrtnc.leaningtech.com/3.0/cj3loader.js"></script>
+</body>
+</html> 

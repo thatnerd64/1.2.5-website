@@ -1,0 +1,16 @@
+filename = 'mystcraft-client-1.2.5-0.9.1.02-Forge-3.3.8.152.jar'
+name = 'Mystcraft'
+side = 'both'
+x-prismlauncher-loaders = []
+x-prismlauncher-mc-versions = [ '1.2.5' ]
+x-prismlauncher-release-type = 'alpha'
+
+[download]
+hash = '9cfa9bfbebd1dbc8a5312f7a1f5761ee9899ffef'
+hash-format = 'sha1'
+mode = 'metadata:curseforge'
+url = ''
+
+[update.curseforge]
+file-id = 2621605
+project-id = 224599

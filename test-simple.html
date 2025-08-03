@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Browser Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        .warning { color: orange; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        .download-instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Minecraft 1.2.5 Browser Test</h1>
+    
+    <div class="test-section">
+        <h2>Browser Compatibility</h2>
+        <div id="browser-info"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>CheerpJ Test</h2>
+        <button onclick="testCheerpJ()">Test CheerpJ Loading</button>
+        <div id="cheerpj-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Minecraft JAR Test</h2>
+        <button onclick="testMinecraftJar()">Test Local Minecraft JAR</button>
+        <div id="jar-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Main Application</h2>
+        <p>Click the button below to open the main Minecraft application:</p>
+        <button onclick="openMainApp()">Open Minecraft Browser</button>
+    </div>
+
+    <script>
+        // Test browser compatibility
+        function testBrowserCompatibility() {
+            const info = document.getElementById('browser-info');
+            const tests = [];
+            
+            // Check WebGL support
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            tests.push({
+                name: 'WebGL Support',
+                result: !!gl,
+                message: gl ? 'WebGL is supported' : 'WebGL is not supported'
+            });
+            
+            // Check fetch API
+            tests.push({
+                name: 'Fetch API',
+                result: typeof fetch !== 'undefined',
+                message: typeof fetch !== 'undefined' ? 'Fetch API is available' : 'Fetch API is not available'
+            });
+            
+            // Check async/await
+            tests.push({
+                name: 'Async/Await',
+                result: true,
+                message: 'Async/await syntax is supported'
+            });
+            
+            // Display results
+            let html = '';
+            tests.forEach(test => {
+                const status = test.result ? 'success' : 'error';
+                html += `<p class="${status}">${test.name}: ${test.message}</p>`;
+            });
+            
+            info.innerHTML = html;
+        }
+
+        // Test CheerpJ loading
+        async function testCheerpJ() {
+            const result = document.getElementById('cheerpj-result');
+            result.innerHTML = '<p class="info">Testing CheerpJ loading...</p>';
+            
+            try {
+                // Check if CheerpJ script is loaded
+                if (typeof cheerpjInit === 'undefined') {
+                    result.innerHTML = '<p class="error">CheerpJ is not loaded. Please check the script tag.</p>';
+                    return;
+                }
+                
+                result.innerHTML = '<p class="success">CheerpJ script is loaded successfully!</p>';
+                
+            } catch (error) {
+                result.innerHTML = `<p class="error">Error testing CheerpJ: ${error.message}</p>`;
+            }
+        }
+
+        // Test local Minecraft JAR
+        async function testMinecraftJar() {
+            const result = document.getElementById('jar-result');
+            result.innerHTML = '<p class="info">Testing local Minecraft JAR file...</p>';
+            
+            try {
+                const response = await fetch('/minecraft/bin/minecraft-1.2.5.jar', {
+                    method: 'HEAD'
+                });
+                
+                if (response.ok) {
+                    const size = response.headers.get('Content-Length');
+                    const sizeMB = Math.round(size / 1024 / 1024);
+                    result.innerHTML = `<p class="success">Minecraft JAR found! Size: ${sizeMB}MB</p>`;
+                } else {
+                    result.innerHTML = `
+                        <p class="error">Minecraft JAR not found (${response.status})</p>
+                        <div class="download-instructions">
+                            <h4>JAR Setup Instructions:</h4>
+                            <ol>
+                                <li>Download the Minecraft 1.2.5 client JAR from a legal source</li>
+                                <li>Place it in the <code>minecraft/bin/</code> folder as <code>minecraft-1.2.5.jar</code></li>
+                            </ol>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                result.innerHTML = `
+                    <p class="error">Error testing JAR file: ${error.message}</p>
+                    <div class="download-instructions">
+                        <h4>JAR Setup Instructions:</h4>
+                        <ol>
+                            <li>Download the Minecraft 1.2.5 client JAR from a legal source</li>
+                            <li>Place it in the <code>minecraft/bin/</code> folder as <code>minecraft-1.2.5.jar</code></li>
+                        </ol>
+                    </div>
+                `;
+            }
+        }
+
+        // Open main application
+        function openMainApp() {
+            window.open('/', '_blank');
+        }
+
+        // Run tests on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            testBrowserCompatibility();
+        });
+    </script>
+
+    <!-- Load CheerpJ for testing -->
+    <script src="https://cjrtnc.leaningtech.com/3.0/cj3loader.js"></script>
+</body>
+</html> 
