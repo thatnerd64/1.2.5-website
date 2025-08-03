@@ -166,3 +166,4 @@ dist/
 build/
 *.zip
 *.tar.gz 
+lib/minecraft-1.2.5.jar
