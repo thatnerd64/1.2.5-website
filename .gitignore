@@ -151,10 +151,6 @@ jspm_packages/
 ehthumbs.db
 Thumbs.db
 
-# Minecraft and Forge files (these should be obtained legally)
-lib/minecraft-1.2.5.jar
-lib/forge/forge-1.2.5.jar
-
 # User-generated content
 saves/
 worlds/
