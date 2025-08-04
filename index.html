@@ -473,6 +473,11 @@
         try {
           await cheerpjInit();
 
+          // Stub missing native method for CheerpJ runtime
+          window.Java_sun_misc_Unsafe_throwException = function (unsafePtr, throwable) {
+            throw throwable;
+          };
+
           // Cache frequently used DOM elements once the runtime is ready
           loading = document.getElementById('loading');
           intro = document.getElementById('intro');
