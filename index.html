@@ -349,24 +349,41 @@
                             return;
                         }
                         
-                        console.log('Calling cheerpOSWrite...');
-                        cheerpOSWrite(fds, fd, bytes, 0, bytes.length, w => {
-                            console.log('cheerpOSWrite callback called with bytes written:', w);
-                            
-                            if (w < 0) {
+                        console.log('Starting chunked cheerpOSWrite...');
+                        const CHUNK_SIZE = 64 * 1024; // 64KB
+                        let offset = 0;
+                        let totalWritten = 0;
+
+                        function writeChunk() {
+                            if (offset >= bytes.length) {
+                                console.log('Calling cheerpOSClose...');
+                                cheerpOSClose(fds, fd);
                                 clearTimeout(timeout);
-                                reject(new Error('Failed to write to CheerpJ filesystem, written: ' + w));
+                                console.log(`${jarName} written to CheerpJ filesystem successfully`);
+                                resolve();
                                 return;
                             }
-                            
-                            console.log('Calling cheerpOSClose...');
-                            cheerpOSClose(fds, fd);
-                            
-                            // Don't wait for close callback, just resolve immediately
-                            clearTimeout(timeout);
-                            console.log(`${jarName} written to CheerpJ filesystem successfully`);
-                            resolve();
-                        });
+
+                            const end = Math.min(offset + CHUNK_SIZE, bytes.length);
+                            const chunk = bytes.subarray(offset, end);
+
+                            cheerpOSWrite(fds, fd, chunk, 0, chunk.length, w => {
+                                console.log('cheerpOSWrite callback called with bytes written:', w);
+
+                                if (w < 0) {
+                                    clearTimeout(timeout);
+                                    reject(new Error('Failed to write to CheerpJ filesystem, written: ' + w));
+                                    return;
+                                }
+
+                                offset += w;
+                                totalWritten += w;
+                                console.log(`Total bytes written: ${totalWritten}/${bytes.length}`);
+                                writeChunk();
+                            });
+                        }
+
+                        writeChunk();
                     });
                 });
 
