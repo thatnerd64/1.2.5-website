@@ -470,8 +470,35 @@
     <script src="https://cjrtnc.leaningtech.com/4.2/loader.js"></script>
     <script>
       (async () => {
-        await cheerpjInit();
-        await cheerpjRunMain("com.mojang.minecraft.Main", ["/app/minecraft.jar"]);
+        try {
+          await cheerpjInit();
+
+          // Cache frequently used DOM elements once the runtime is ready
+          loading = document.getElementById('loading');
+          intro = document.getElementById('intro');
+          display = document.getElementById('display');
+          progressContainer = document.getElementById('progress-container');
+          progressFill = document.getElementById('progress-fill');
+          eulaCheckbox = document.getElementById('eula-accepted');
+          playSection = document.getElementById('play-section');
+          usernameInput = document.getElementById('username');
+          serverInput = document.getElementById('server');
+          portInput = document.getElementById('port');
+
+          eulaCheckbox.addEventListener('change', handleEulaChange);
+
+          hideElement(loading);
+          showElement(intro);
+
+          if (AUTO_START) {
+            eulaCheckbox.checked = true;
+            handleEulaChange();
+            startGame();
+          }
+        } catch (err) {
+          console.error('Failed to initialize CheerpJ:', err);
+          showError('Failed to initialize CheerpJ: ' + err.message);
+        }
       })();
     </script>
 </body>
