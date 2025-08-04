@@ -520,14 +520,21 @@
     </script>
 
     <!-- Load CheerpJ -->
-    <script src="https://cjrtnc.leaningtech.com/4.2/loader.js"></script>
-      <script>
-        (async () => {
-          try {
-            await cheerpjInit({
-              enableDebug: true,
-              javaProperties: ["java.library.path=/cheerpj-natives/natives"]
-            });
+    <script src="https://cjrtnc.leaningtech.com/4.2/loader.js?v=20250804"></script>
+    <script>
+      (async () => {
+        try {
+          await cheerpjInit({
+            enableDebug: true,
+            javaProperties: ["java.library.path=/cheerpj-natives/natives"]
+          });
+
+          window.addEventListener('error', (e) => {
+            console.error('Unhandled error:', e.error || e.message, e);
+          });
+          window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled promise rejection:', e.reason);
+          });
 
           // Stub missing native method for CheerpJ runtime
           window.Java_sun_misc_Unsafe_throwException = function (unsafePtr, throwable) {
@@ -539,16 +546,16 @@
           intro = document.getElementById('intro');
           display = document.getElementById('display');
           progressContainer = document.getElementById('progress-container');
-            progressFill = document.getElementById('progress-fill');
-            eulaCheckbox = document.getElementById('eula-accepted');
-            playSection = document.getElementById('play-section');
-            usernameInput = document.getElementById('username');
-            serverInput = document.getElementById('server');
-            portInput = document.getElementById('port');
-            resetStorageButton = document.getElementById('reset-storage');
+          progressFill = document.getElementById('progress-fill');
+          eulaCheckbox = document.getElementById('eula-accepted');
+          playSection = document.getElementById('play-section');
+          usernameInput = document.getElementById('username');
+          serverInput = document.getElementById('server');
+          portInput = document.getElementById('port');
+          resetStorageButton = document.getElementById('reset-storage');
 
-            eulaCheckbox.addEventListener('change', handleEulaChange);
-            resetStorageButton.addEventListener('click', resetCheerpJStorage);
+          eulaCheckbox.addEventListener('change', handleEulaChange);
+          resetStorageButton.addEventListener('click', resetCheerpJStorage);
 
           hideElement(loading);
           showElement(intro);
