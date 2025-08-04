@@ -175,7 +175,9 @@
                 <p>Clicking the button below will load the game from the local JAR file.</p>
                 <button id="play-button" onclick="startGame()">Play Minecraft!</button>
                     </div>
-                    
+
+            <button id="reset-storage">Reset CheerpJ Storage</button>
+
             <div class="disclaimer">
                 This is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft.
                 You must have a legal copy of Minecraft 1.2.5 to use this application.
@@ -211,11 +213,14 @@
         const DEFAULT_PORT = urlParams.get('port') || '25565';
 
         // DOM elements
-        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput, serverInput, portInput;
+        let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput, serverInput, portInput, resetStorageButton;
+
+        let lastLoadedJar = null;
 
         // Initialize CheerpJ
         // Load a JAR file into CheerpJ filesystem
         async function loadJarToCheerpJ(localPath, cheerpjPath, jarName) {
+            lastLoadedJar = jarName;
             try {
                 console.log(`Loading ${jarName} from local server...`);
 
@@ -270,39 +275,47 @@
                         cheerpOSCreateDir(accumulatedPath, {}, 0o777, () => resolve());
                     });
                 }
-                
-                // Write to CheerpJ filesystem - this is the key part!
-                return new Promise((resolve, reject) => {
+
+                // Prefer high-level helper if available
+                if (typeof cheerpjWriteFile === 'function') {
+                    await new Promise((resolve, reject) => {
+                        cheerpjWriteFile(cheerpjPath, bytes, err => {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                    console.log(`${jarName} written to CheerpJ filesystem successfully`);
+                    return;
+                }
+
+                // Fallback to manual chunked write
+                await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
                         reject(new Error('CheerpJ filesystem operations timed out after 10 seconds'));
                     }, 10000);
-                    
+
                     var fds = [];
-                    console.log('Calling cheerpOSOpen...');
-                    
                     cheerpOSOpen(fds, cheerpjPath, "w", fd => {
-                        console.log('cheerpOSOpen callback called with fd:', fd);
-                        
                         if (fd < 0) {
                             clearTimeout(timeout);
                             reject(new Error('Failed to open file in CheerpJ filesystem, fd: ' + fd));
                             return;
                         }
-                        
-                        console.log('Starting chunked cheerpOSWrite...');
+
                         const CHUNK_SIZE = 64 * 1024; // 64KB
                         let offset = 0;
-                        let totalWritten = 0;
 
-                        function writeChunk(cb) {
-                            if (typeof cb !== "function") cb = () => {};
+                        function writeChunk(cb = () => {}) {
                             if (offset >= bytes.length) {
-                                console.log('Calling cheerpOSClose...');
-                                cheerpOSClose(fds, fd);
-                                clearTimeout(timeout);
-                                console.log(`${jarName} written to CheerpJ filesystem successfully`);
-                                cb();
-                                resolve();
+                                cheerpOSClose(fds, fd, () => {
+                                    clearTimeout(timeout);
+                                    console.log(`${jarName} written to CheerpJ filesystem successfully`);
+                                    cb();
+                                    resolve();
+                                });
                                 return;
                             }
 
@@ -310,8 +323,6 @@
                             const chunk = bytes.subarray(offset, end);
 
                             cheerpOSWrite(fds, fd, chunk, 0, chunk.length, w => {
-                                console.log('cheerpOSWrite callback called with bytes written:', w);
-
                                 if (w < 0) {
                                     clearTimeout(timeout);
                                     reject(new Error('Failed to write to CheerpJ filesystem, written: ' + w));
@@ -319,8 +330,6 @@
                                 }
 
                                 offset += w;
-                                totalWritten += w;
-                                console.log(`Total bytes written: ${totalWritten}/${bytes.length}`);
                                 writeChunk(cb);
                             });
                         }
@@ -355,8 +364,18 @@
                 "zdimensional-anchor_rev3.2_for_1.2.5-client.jar"
             ];
 
+            const modsParam = urlParams.get('mods');
+            let modsToLoad = modList;
+            if (modsParam === 'none') {
+                modsToLoad = [];
+            } else if (modsParam) {
+                const allowed = new Set(modsParam.split(',').map(m => m.trim()));
+                modsToLoad = modList.filter(m => allowed.has(m.replace(/\.jar$/, '')));
+            }
+            console.log('Mods to load:', modsToLoad.length ? modsToLoad.join(', ') : '(none)');
+
             try {
-                for (const modFile of modList) {
+                for (const modFile of modsToLoad) {
                     const name = modFile;
                     await loadJarToCheerpJ(`${LOCAL_MINECRAFT_DIR}/mods/${name}`, `${MINECRAFT_DIR}/mods/${name}`, `Mod ${name}`);
                 }
@@ -424,7 +443,15 @@
                 if (typeof cheerpjCreateDisplay === "function") cheerpjCreateDisplay(854, 480);
                 console.log('LWJGL canvas element set:', window.lwjglCanvasElement);
                 const launchArgs = buildLaunchArgs();
-                await cheerpjRunMain("net.minecraft.client.Minecraft", launchArgs);
+                try {
+                    await cheerpjRunMain("net.minecraft.client.Minecraft", launchArgs);
+                } catch (e) {
+                    console.error("Failed to start game:", e && e.stack || e);
+                    if (lastLoadedJar) {
+                        console.error('Last JAR loaded:', lastLoadedJar);
+                    }
+                    throw e;
+                }
 
             } catch (error) {
                 console.error('Failed to start game:', error);
@@ -442,6 +469,34 @@
 
         function hideElement(element) {
             element.classList.add('hidden');
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.left = '50%';
+            toast.style.transform = 'translateX(-50%)';
+            toast.style.background = '#333';
+            toast.style.color = '#fff';
+            toast.style.padding = '10px 20px';
+            toast.style.borderRadius = '5px';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
+        function resetCheerpJStorage() {
+            try {
+                if (window.indexedDB && indexedDB.deleteDatabase) {
+                    indexedDB.deleteDatabase('cheerpjfs');
+                    indexedDB.deleteDatabase('CJFS');
+                }
+            } catch (e) {
+                console.warn('Failed to clear CheerpJ storage:', e);
+            }
+            showToast('Storage cleared. Reloading…');
+            setTimeout(() => location.reload(), 500);
         }
 
         function showError(message) {
@@ -466,13 +521,13 @@
 
     <!-- Load CheerpJ -->
     <script src="https://cjrtnc.leaningtech.com/4.2/loader.js"></script>
-    <script>
-      (async () => {
-        try {
-          await cheerpjInit({
-            status: "default",
-            javaProperties: ["java.library.path=/cheerpj-natives/natives"]
-          });
+      <script>
+        (async () => {
+          try {
+            await cheerpjInit({
+              enableDebug: true,
+              javaProperties: ["java.library.path=/cheerpj-natives/natives"]
+            });
 
           // Stub missing native method for CheerpJ runtime
           window.Java_sun_misc_Unsafe_throwException = function (unsafePtr, throwable) {
@@ -484,14 +539,16 @@
           intro = document.getElementById('intro');
           display = document.getElementById('display');
           progressContainer = document.getElementById('progress-container');
-          progressFill = document.getElementById('progress-fill');
-          eulaCheckbox = document.getElementById('eula-accepted');
-          playSection = document.getElementById('play-section');
-          usernameInput = document.getElementById('username');
-          serverInput = document.getElementById('server');
-          portInput = document.getElementById('port');
+            progressFill = document.getElementById('progress-fill');
+            eulaCheckbox = document.getElementById('eula-accepted');
+            playSection = document.getElementById('play-section');
+            usernameInput = document.getElementById('username');
+            serverInput = document.getElementById('server');
+            portInput = document.getElementById('port');
+            resetStorageButton = document.getElementById('reset-storage');
 
-          eulaCheckbox.addEventListener('change', handleEulaChange);
+            eulaCheckbox.addEventListener('change', handleEulaChange);
+            resetStorageButton.addEventListener('click', resetCheerpJStorage);
 
           hideElement(loading);
           showElement(intro);
