@@ -127,6 +127,11 @@ minecraft-1.2.5/
 
 ## Troubleshooting
 
+- Use the CheerpJ 4.2 loader only.
+- Use the "Reset CheerpJ Storage" button if the filesystem gets into a bad state.
+- Use `?mods=none` to test vanilla, then add mods incrementally.
+- If you see `java/util/Hashtable$EntrySet`, identify and replace or remove the offending mod (it references non-public JDK internals).
+
 ### Common Issues
 
 **JAR File Not Found**
