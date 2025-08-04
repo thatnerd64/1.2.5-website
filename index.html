@@ -202,7 +202,6 @@
         const CHEERPJ_JAR_PATH = `${MINECRAFT_DIR}/bin/minecraft-1.2.5.jar`;
         const LWJGL_JAR_PATH = "/files/lwjgl-2.9.3.jar";
         const LWJGL_UTIL_JAR_PATH = "/files/lwjgl_util-2.9.3.jar";
-        let JAR_LIBS = `${CHEERPJ_JAR_PATH}:${LWJGL_JAR_PATH}:${LWJGL_UTIL_JAR_PATH}`;
 
         // URL parameters for testing/automation
         const urlParams = new URLSearchParams(window.location.search);
@@ -295,12 +294,14 @@
                         let offset = 0;
                         let totalWritten = 0;
 
-                        function writeChunk() {
+                        function writeChunk(cb) {
+                            if (typeof cb !== "function") cb = () => {};
                             if (offset >= bytes.length) {
                                 console.log('Calling cheerpOSClose...');
                                 cheerpOSClose(fds, fd);
                                 clearTimeout(timeout);
                                 console.log(`${jarName} written to CheerpJ filesystem successfully`);
+                                cb();
                                 resolve();
                                 return;
                             }
@@ -320,7 +321,7 @@
                                 offset += w;
                                 totalWritten += w;
                                 console.log(`Total bytes written: ${totalWritten}/${bytes.length}`);
-                                writeChunk();
+                                writeChunk(cb);
                             });
                         }
 
@@ -359,9 +360,6 @@
                     const name = modFile;
                     await loadJarToCheerpJ(`${LOCAL_MINECRAFT_DIR}/mods/${name}`, `${MINECRAFT_DIR}/mods/${name}`, `Mod ${name}`);
                 }
-                const modJars = modList.map(mod => `${MINECRAFT_DIR}/mods/${mod}`).join(':');
-                JAR_LIBS = `${JAR_LIBS}:${modJars}`;
-
             } catch (err) {
                 console.warn('Error loading mods:', err);
             }
@@ -389,10 +387,10 @@
             const username = (usernameInput.value || DEFAULT_USERNAME).trim();
             const host = (serverInput && serverInput.value.trim()) || '';
             const port = (portInput && portInput.value.trim()) || '25565';
-            const args = [username, "-"];
+            const args = ["--username", username];
             if (host) {
-                args.push(host);
-                args.push(port);
+                args.push("--server", host);
+                args.push("--port", port);
             }
             console.log('Using username:', username);
             if (host) {
@@ -420,13 +418,13 @@
                 showElement(display);
 
                 console.log('Running Minecraft main class...');
-                console.log('JAR libs:', JAR_LIBS);
 
                 // Set up LWJGL canvas for native library support
                 window.lwjglCanvasElement = document.getElementById('minecraft-canvas');
+                if (typeof cheerpjCreateDisplay === "function") cheerpjCreateDisplay(854, 480);
                 console.log('LWJGL canvas element set:', window.lwjglCanvasElement);
                 const launchArgs = buildLaunchArgs();
-                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, "-noverify", ...launchArgs);
+                await cheerpjRunMain("net.minecraft.client.Minecraft", launchArgs);
 
             } catch (error) {
                 console.error('Failed to start game:', error);
@@ -471,7 +469,10 @@
     <script>
       (async () => {
         try {
-          await cheerpjInit();
+          await cheerpjInit({
+            status: "default",
+            javaProperties: ["java.library.path=/cheerpj-natives/natives"]
+          });
 
           // Stub missing native method for CheerpJ runtime
           window.Java_sun_misc_Unsafe_throwException = function (unsafePtr, throwable) {
