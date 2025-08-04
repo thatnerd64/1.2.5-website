@@ -486,7 +486,7 @@
                 window.lwjglCanvasElement = document.getElementById('minecraft-canvas');
                 console.log('LWJGL canvas element set:', window.lwjglCanvasElement);
                 const launchArgs = buildLaunchArgs();
-                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, ...launchArgs);
+                cheerpjRunMain("net.minecraft.client.Minecraft", JAR_LIBS, "-noverify", ...launchArgs);
 
             } catch (error) {
                 console.error('Failed to start game:', error);

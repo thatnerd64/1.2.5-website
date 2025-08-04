@@ -142,6 +142,11 @@ minecraft-1.2.5/
 - Check browser console for error messages
 - Ensure JavaScript is enabled in your browser
 
+**SHA1 digest error / signature mismatch**
+- Occurs when the JAR's `META-INF` signatures don't match its contents
+- Removing the `META-INF` folder or running with the `-noverify` JVM flag resolves this
+- The web launcher includes `-noverify` by default
+
 **404 Errors for LWJGL**
 - This is normal - LWJGL libraries are provided internally by CheerpJ
 - The game should still work despite these errors in the network tab
