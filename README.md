@@ -2,7 +2,7 @@
 
 ## What is it
 
-Thanks to [CheerpJ](https://cheerpj.com), this project runs Minecraft 1.2.5 in the browser, without the requirement of having the JVM locally installed on the computer.
+Thanks to [CheerpJ 4.0](https://cheerpj.com), this project runs Minecraft 1.2.5 in the browser, without the requirement of having the JVM locally installed on the computer.
 
 This is a simplified implementation inspired by [Browsercraft](https://github.com/leaningtech/browsercraft) that runs the unmodified Minecraft 1.2.5 client JAR from a local file.
 
