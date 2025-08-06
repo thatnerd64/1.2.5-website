@@ -527,6 +527,7 @@
       (async () => {
         try {
           await cheerpjInit({
+            runtime: "full",
             enableDebug: true,
             javaProperties: ["java.library.path=/cheerpj-natives/natives"]
           });
