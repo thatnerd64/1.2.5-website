@@ -346,32 +346,34 @@
 
         // Load all required JARs
         async function loadMods() {
-            const modList = [
-                "BlockHelper-1.1.1-1.2.5-client.jar",
-                "CraftPresence-Forge-1.2.5-Release-1.9.6.jar",
-                "EE2ClientV1.4.6.5.jar",
-                "LogisticsPipes-client-0.4.5.67.jar",
-                "LumySkinPatch-for-MC-1.2.5-1.0.12.jar",
-                "MouseTweaks-2.7.2-mc1.2.5.jar",
-                "WorldEdit.jar",
-                "additionalpipes-client-3.2.0.3.jar",
-                "buildcraft-client-3.1.6.25.jar",
-                "forestry-client-A-1.4.8.4.jar",
-                "immibis-core_49.1.1_for_1.2.5-client.jar",
-                "industrialcraft-2-client_1.97.jar",
-                "mystcraft-client-1.2.5-0.9.1.02-Forge-3.3.8.152.jar",
-                "tubestuff_49.1.2_for_1.2.5-client.jar",
-                "zdimensional-anchor_rev3.2_for_1.2.5-client.jar"
-            ];
-
             const modsParam = urlParams.get('mods');
-            let modsToLoad = modList;
             if (modsParam === 'none') {
-                modsToLoad = [];
-            } else if (modsParam) {
+                console.log('Mods to load: (none)');
+                return;
+            }
+
+            let modList = [];
+            try {
+                const response = await fetch(`${LOCAL_MINECRAFT_DIR}/mods/`);
+                const text = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(text, 'text/html');
+                const links = Array.from(doc.querySelectorAll('a'));
+                modList = links
+                    .map(a => a.getAttribute('href'))
+                    .filter(href => href && href.endsWith('.jar'))
+                    .map(href => href.split('/').pop());
+            } catch (err) {
+                console.warn('Could not dynamically load mods from directory listing, falling back to empty list.', err);
+                modList = [];
+            }
+
+            let modsToLoad = modList;
+            if (modsParam) {
                 const allowed = new Set(modsParam.split(',').map(m => m.trim()));
                 modsToLoad = modList.filter(m => allowed.has(m.replace(/\.jar$/, '')));
             }
+
             console.log('Mods to load:', modsToLoad.length ? modsToLoad.join(', ') : '(none)');
 
             try {
