@@ -135,6 +135,9 @@
             padding: 15px;
             border-radius: 5px;
             margin: 15px 0;
+            line-height: 1.5;
+            max-width: 600px;
+            text-align: left;
         }
     </style>
 </head>
@@ -504,7 +507,7 @@
         function showError(message) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
-            errorDiv.textContent = message;
+            errorDiv.innerHTML = message; // Changed to innerHTML to support HTML formatting
             
             const intro = document.getElementById('intro');
             intro.insertBefore(errorDiv, intro.firstChild);
@@ -524,8 +527,45 @@
     <!-- Load CheerpJ -->
     <script src="https://cjrtnc.leaningtech.com/4.2/loader.js?v=20250804"></script>
     <script>
+      // Add a timeout and better error handling for CheerpJ loading
+      let cheerpjLoadTimeout;
+      
+      function showCheerpJError() {
+        hideElement(document.getElementById('loading'));
+        showElement(document.getElementById('intro'));
+        
+        const errorMessage = `
+          <strong>CheerpJ Failed to Load</strong><br><br>
+          The CheerpJ runtime could not be loaded. This is usually caused by:<br><br>
+          • <strong>Ad blockers</strong> - Please disable ad blockers for this site<br>
+          • <strong>Browser security settings</strong> - Allow external scripts<br>
+          • <strong>Network connectivity issues</strong><br><br>
+          <strong>To fix this:</strong><br>
+          1. Disable ad blockers (uBlock Origin, AdBlock, etc.)<br>
+          2. Refresh the page<br>
+          3. Make sure JavaScript is enabled<br>
+          4. Try a different browser if the issue persists
+        `;
+        showError(errorMessage);
+      }
+      
+      // Set a timeout for CheerpJ loading
+      cheerpjLoadTimeout = setTimeout(() => {
+        if (typeof cheerpjInit === 'undefined') {
+          console.error('CheerpJ failed to load within timeout period');
+          showCheerpJError();
+        }
+      }, 10000); // 10 second timeout
+      
       (async () => {
         try {
+          // Check if CheerpJ is available
+          if (typeof cheerpjInit === 'undefined') {
+            throw new Error('CheerpJ library not loaded - likely blocked by ad blocker or browser security');
+          }
+          
+          clearTimeout(cheerpjLoadTimeout);
+          
           await cheerpjInit({
             runtime: "full",
             enableDebug: true,
@@ -570,7 +610,17 @@
           }
         } catch (err) {
           console.error('Failed to initialize CheerpJ:', err);
-          showError('Failed to initialize CheerpJ: ' + err.message);
+          clearTimeout(cheerpjLoadTimeout);
+          
+          // If CheerpJ is not defined, it's likely blocked
+          if (typeof cheerpjInit === 'undefined') {
+            showCheerpJError();
+          } else {
+            // CheerpJ loaded but initialization failed
+            hideElement(document.getElementById('loading'));
+            showElement(document.getElementById('intro'));
+            showError('Failed to initialize CheerpJ: ' + err.message + '<br><br>Try refreshing the page or check the browser console for more details.');
+          }
         }
       })();
     </script>
