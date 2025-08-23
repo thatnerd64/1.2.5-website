@@ -218,6 +218,35 @@
         // DOM elements
         let loading, intro, display, progressContainer, progressFill, eulaCheckbox, playSection, usernameInput, serverInput, portInput, resetStorageButton;
 
+        // Initialize basic UI elements and handlers (independent of CheerpJ)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get DOM elements
+            loading = document.getElementById('loading');
+            intro = document.getElementById('intro');
+            display = document.getElementById('display');
+            progressContainer = document.getElementById('progress-container');
+            progressFill = document.getElementById('progress-fill');
+            eulaCheckbox = document.getElementById('eula-accepted');
+            playSection = document.getElementById('play-section');
+            usernameInput = document.getElementById('username');
+            serverInput = document.getElementById('server');
+            portInput = document.getElementById('port');
+            resetStorageButton = document.getElementById('reset-storage');
+
+            // Set up basic event handlers
+            if (eulaCheckbox) {
+                eulaCheckbox.addEventListener('change', handleEulaChange);
+            }
+            if (resetStorageButton) {
+                resetStorageButton.addEventListener('click', resetCheerpJStorage);
+            }
+
+            // Set default values
+            if (usernameInput) usernameInput.value = DEFAULT_USERNAME;
+            if (serverInput) serverInput.value = DEFAULT_SERVER;
+            if (portInput) portInput.value = DEFAULT_PORT;
+        });
+
         let lastLoadedJar = null;
 
         // Initialize CheerpJ
@@ -426,6 +455,12 @@
         // Start the game
         async function startGame() {
             try {
+                // Check if CheerpJ is available before attempting to start
+                if (typeof cheerpjInit === 'undefined' || typeof cheerpOSCreateDir === 'undefined') {
+                    showError('Cannot start game: CheerpJ is not loaded. Please resolve the CheerpJ loading issue first.');
+                    return;
+                }
+                
                 console.log('Starting Minecraft...');
 
                 // Load all JARs into CheerpJ filesystem
@@ -531,8 +566,11 @@
       let cheerpjLoadTimeout;
       
       function showCheerpJError() {
-        hideElement(document.getElementById('loading'));
-        showElement(document.getElementById('intro'));
+        const loadingEl = document.getElementById('loading');
+        const introEl = document.getElementById('intro');
+        
+        hideElement(loadingEl);
+        showElement(introEl);
         
         const errorMessage = `
           <strong>CheerpJ Failed to Load</strong><br><br>
@@ -584,22 +622,7 @@
             throw throwable;
           };
 
-          // Cache frequently used DOM elements once the runtime is ready
-          loading = document.getElementById('loading');
-          intro = document.getElementById('intro');
-          display = document.getElementById('display');
-          progressContainer = document.getElementById('progress-container');
-          progressFill = document.getElementById('progress-fill');
-          eulaCheckbox = document.getElementById('eula-accepted');
-          playSection = document.getElementById('play-section');
-          usernameInput = document.getElementById('username');
-          serverInput = document.getElementById('server');
-          portInput = document.getElementById('port');
-          resetStorageButton = document.getElementById('reset-storage');
-
-          eulaCheckbox.addEventListener('change', handleEulaChange);
-          resetStorageButton.addEventListener('click', resetCheerpJStorage);
-
+          // UI is already initialized, just show the intro
           hideElement(loading);
           showElement(intro);
 
@@ -617,8 +640,10 @@
             showCheerpJError();
           } else {
             // CheerpJ loaded but initialization failed
-            hideElement(document.getElementById('loading'));
-            showElement(document.getElementById('intro'));
+            const loadingEl = document.getElementById('loading');
+            const introEl = document.getElementById('intro');
+            hideElement(loadingEl);
+            showElement(introEl);
             showError('Failed to initialize CheerpJ: ' + err.message + '<br><br>Try refreshing the page or check the browser console for more details.');
           }
         }
