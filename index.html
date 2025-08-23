@@ -559,8 +559,8 @@
 
     </script>
 
-    <!-- Load CheerpJ -->
-    <script src="https://cjrtnc.leaningtech.com/4.2/loader.js?v=20250804"></script>
+    <!-- Load CheerpJ (Local Version) -->
+    <script src="./lib/cheerpj/loader.js"></script>
     <script>
       // Add a timeout and better error handling for CheerpJ loading
       let cheerpjLoadTimeout;
@@ -623,8 +623,10 @@
           };
 
           // UI is already initialized, just show the intro
-          hideElement(loading);
-          showElement(intro);
+          const loadingEl = document.getElementById('loading');
+          const introEl = document.getElementById('intro');
+          if (loadingEl) hideElement(loadingEl);
+          if (introEl) showElement(introEl);
 
           if (AUTO_START) {
             eulaCheckbox.checked = true;
