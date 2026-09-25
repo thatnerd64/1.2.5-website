@@ -39,6 +39,10 @@ public final class Compile {
         tool.setOptimizationLevel(dev ? TeaVMOptimizationLevel.SIMPLE : TeaVMOptimizationLevel.ADVANCED);
         tool.setDebugInformationGenerated(false);
         tool.setSourceMapsFileGenerated(dev);
+        if (!dev) {
+            // Don't ship a source map left over from an earlier development build.
+            new File(opts.get("out"), "classes.js.map").delete();
+        }
         tool.setStrict(false);
         if (opts.containsKey("cache")) {
             tool.setIncremental(dev);

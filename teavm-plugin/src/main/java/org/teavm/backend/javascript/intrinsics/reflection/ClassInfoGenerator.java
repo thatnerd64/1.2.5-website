@@ -13,7 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- *  Modified for Minecraft Web: skips classes missing from the class source in writeSimpleConstructors.
+ *  Modified for Minecraft Web: writeSimpleConstructors skips classes missing from the class source and
+ *  constructors that were not generated.
  */
 package org.teavm.backend.javascript.intrinsics.reflection;
 
@@ -245,8 +246,12 @@ public class ClassInfoGenerator implements Injector, Generator {
                     continue;
                 }
                 var ctor = cls.getMethod(new MethodDescriptor("<init>", void.class));
+                // Patched for Minecraft Web: with full optimization a constructor that is never called is not
+                // generated, so only list constructors that were reached and have a body.
+                var ctorDep = ctor != null ? context.getDependencies().getMethod(ctor.getReference()) : null;
                 if (ctor != null && !ctor.hasModifier(ElementModifier.ABSTRACT)
-                        && ctor.getLevel() == AccessLevel.PUBLIC) {
+                        && ctor.getLevel() == AccessLevel.PUBLIC && ctor.getProgram() != null
+                        && ctorDep != null && ctorDep.isUsed()) {
                     if (!first) {
                         writer.append(",").ws();
                     }

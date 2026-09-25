@@ -206,4 +206,52 @@ final class Patches {
         }
         return null;
     }
+
+    /**
+     * Routes ChunkProvider's chunk lookups through {@code RetroChunkCache} (gameglue): the original
+     * {@code b(II)Lack;} (provideChunk) and {@code a(II)Z} (chunkExists) are renamed and replaced by
+     * straight-line methods calling the cache, which falls back to the originals. Returns null when the class
+     * does not have the expected shape (another Minecraft version), leaving it untouched.
+     */
+    static byte[] chunkProviderCache(byte[] bytes) {
+        org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+        new ClassReader(bytes).accept(node, 0);
+        org.objectweb.asm.tree.MethodNode provide = null;
+        org.objectweb.asm.tree.MethodNode exists = null;
+        for (org.objectweb.asm.tree.MethodNode m : node.methods) {
+            if (m.name.equals("b") && m.desc.equals("(II)Lack;") && (m.access & Opcodes.ACC_STATIC) == 0) {
+                provide = m;
+            } else if (m.name.equals("a") && m.desc.equals("(II)Z") && (m.access & Opcodes.ACC_STATIC) == 0) {
+                exists = m;
+            }
+        }
+        if (provide == null || exists == null) {
+            return null;
+        }
+        provide.name = "retro$provideChunk";
+        provide.access = (provide.access & ~(Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED)) | Opcodes.ACC_PUBLIC;
+        exists.name = "retro$chunkExists";
+        exists.access = (exists.access & ~(Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED)) | Opcodes.ACC_PUBLIC;
+        node.interfaces.add("RetroChunkSource");
+        String[][] wrappers = {
+            { "b", "(II)Lack;", "provideChunk", "(LRetroChunkSource;II)Lack;" },
+            { "a", "(II)Z", "chunkExists", "(LRetroChunkSource;II)Z" },
+        };
+        for (String[] w : wrappers) {
+            org.objectweb.asm.tree.MethodNode m = new org.objectweb.asm.tree.MethodNode(Opcodes.ACC_PUBLIC, w[0],
+                    w[1], null, null);
+            m.visitCode();
+            m.visitVarInsn(Opcodes.ALOAD, 0);
+            m.visitVarInsn(Opcodes.ILOAD, 1);
+            m.visitVarInsn(Opcodes.ILOAD, 2);
+            m.visitMethodInsn(Opcodes.INVOKESTATIC, "RetroChunkCache", w[2], w[3], false);
+            m.visitInsn(w[1].endsWith("Z") ? Opcodes.IRETURN : Opcodes.ARETURN);
+            m.visitMaxs(3, 3);
+            m.visitEnd();
+            node.methods.add(m);
+        }
+        ClassWriter writer = new ClassWriter(0);
+        node.accept(writer);
+        return writer.toByteArray();
+    }
 }

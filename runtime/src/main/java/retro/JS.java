@@ -37,7 +37,7 @@ public final class JS {
             + "  else onError('HTTP ' + xhr.status + ' for ' + url);"
             + "};"
             + "xhr.onerror = function() { onError('Network error loading ' + url); };"
-            + "if (onProgress) xhr.onprogress = function(e) { onProgress(e.loaded, e.lengthComputable ? e.total : 0); };"
+            + "if (onProgress) xhr.onprogress = function(ev) { onProgress(ev.loaded, ev.lengthComputable ? ev.total : 0); };"
             + "xhr.send();")
     private static native void fetchImpl(String url, BufferCallback onOk, ErrorCallback onError,
             ProgressCallback onProgress);

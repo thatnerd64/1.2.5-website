@@ -250,6 +250,16 @@ public final class Prepare {
             patched.put(e.getKey(),
                     Patches.transform(e.getKey(), e.getValue(), hierarchy, byName, classes.keySet(), strings));
         }
+        // ChunkProvider: int-keyed front cache for chunk lookups (see RetroChunkCache in gameglue).
+        if (patched.containsKey("ko")) {
+            byte[] fast = Patches.chunkProviderCache(patched.get("ko"));
+            if (fast != null) {
+                patched.put("ko", fast);
+                log.add("ChunkProvider: chunk lookups go through RetroChunkCache");
+            } else {
+                log.add("ChunkProvider: unexpected shape, chunk cache not installed");
+            }
+        }
         // Class names built at runtime from a package plus a constant suffix (IC2: getPackage() + ".common.X"):
         // classes whose dotted name ends with a string constant of the form ".a.B" or "a.B" become loadable by name.
         Map<String, List<String>> bySuffix = new HashMap<>();
