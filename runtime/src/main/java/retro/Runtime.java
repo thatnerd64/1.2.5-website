@@ -67,6 +67,7 @@ public final class Runtime {
         String dbName = JS.config("storageName");
         Persistence.attach(fs, dbName != null ? dbName : "minecraft-1.2.5-full-retro");
 
+        retro.rt.FileUrls.install();
         ClipboardBridge.install();
         Input.install();
         Input.setActive(true);

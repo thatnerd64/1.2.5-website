@@ -12,7 +12,7 @@ import org.teavm.classlib.java.awt.image.TBufferedImage;
 import org.teavm.classlib.java.awt.image.TRenderedImage;
 import retro.img.Png;
 
-/** javax.imageio.ImageIO: PNG only (all Minecraft and mod textures are PNG). */
+/** javax.imageio.ImageIO: PNG and BMP (all Minecraft and mod textures are one of these). */
 public final class TImageIO {
     private TImageIO() {
     }
@@ -49,16 +49,28 @@ public final class TImageIO {
         if (url == null) {
             throw new IllegalArgumentException("input == null!");
         }
+        if ("res".equals(url.getProtocol())) {
+            byte[] data = retro.rt.Resources.read(url.getPath());
+            if (data == null) {
+                throw new IOException("Can't get input stream from URL!");
+            }
+            return decode(data);
+        }
         try (InputStream in = url.openStream()) {
             return read(in);
         }
     }
 
     public static TBufferedImage decode(byte[] data) throws IOException {
-        if (!Png.isPng(data)) {
+        Png.Image image;
+        if (Png.isPng(data)) {
+            image = Png.decode(data);
+        } else if (retro.img.Bmp.isBmp(data)) {
+            image = retro.img.Bmp.decode(data);
+        } else {
+            retro.JS.log("ImageIO: unsupported image data (" + data.length + " bytes, not PNG or BMP)");
             return null;
         }
-        Png.Image image = Png.decode(data);
         return new TBufferedImage(image.width, image.height,
                 image.hasAlpha ? TBufferedImage.TYPE_INT_ARGB : TBufferedImage.TYPE_INT_ARGB, image.argb);
     }
@@ -96,7 +108,7 @@ public final class TImageIO {
     }
 
     public static String[] getReaderFormatNames() {
-        return new String[] { "png", "PNG" };
+        return new String[] { "png", "PNG", "bmp", "BMP" };
     }
 
     public static String[] getWriterFormatNames() {

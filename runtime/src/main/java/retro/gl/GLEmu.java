@@ -80,6 +80,8 @@ public final class GLEmu {
         int width;
         int height;
         int maxLevel;
+        /** True once re-specified as RGB8 to receive copies from the (alpha-less) default framebuffer. */
+        boolean rgb;
     }
 
     private static final List<Tex> textures = new ArrayList<>();
@@ -95,6 +97,10 @@ public final class GLEmu {
         boolean normalized;
         int stride;
         Buffer buffer;
+        /** Buffer position when the pointer was set (LWJGL passes buffer address + position at call time). */
+        int position;
+        ArrayBuffer base;
+        int baseOffset;
         int vbo;
         int vboOffset;
     }
@@ -1173,6 +1179,7 @@ public final class GLEmu {
         if (level == 0) {
             t.width = width;
             t.height = height;
+            t.rgb = false;
         }
         if (level > t.maxLevel) {
             t.maxLevel = level;
@@ -1191,6 +1198,18 @@ public final class GLEmu {
     }
 
     public static void copyTexSubImage2D(int target, int level, int xoff, int yoff, int x, int y, int w, int h) {
+        Tex t = tex(boundTexture[activeUnit]);
+        if (t == null) {
+            return;
+        }
+        if (boundFramebuffer == 0 && !t.rgb && t.width > 0) {
+            // The canvas has no alpha channel and WebGL cannot copy RGB into RGBA. Desktop GL fills alpha with 1
+            // in that case, which is what an RGB8 texture samples as.
+            gl.texImage2D(GL_TEXTURE_2D, 0, 0x8051, t.width, t.height, 0, 0x1907, GL_UNSIGNED_BYTE, null);
+            gl.texParameteri(GL_TEXTURE_2D, 0x813D, 0);
+            t.maxLevel = 0;
+            t.rgb = true;
+        }
         gl.copyTexSubImage2D(GL_TEXTURE_2D, level, xoff, yoff, x, y, w, h);
     }
 
@@ -1359,6 +1378,15 @@ public final class GLEmu {
         a.stride = stride;
         a.buffer = buffer;
         a.vbo = 0;
+        if (buffer != null) {
+            a.position = buffer.position();
+            Src s = new Src();
+            resolve(buffer, s);
+            a.base = s.base;
+            a.baseOffset = s.offset;
+        } else {
+            a.base = null;
+        }
     }
 
     private static void pointer(Arr a, int size, int type, boolean normalized, int stride, long offset) {
@@ -1570,8 +1598,9 @@ public final class GLEmu {
             }
             s.base = data;
             s.offset = a.vboOffset;
-        } else if (a.buffer != null) {
-            resolve(a.buffer, s);
+        } else if (a.base != null) {
+            s.base = a.base;
+            s.offset = a.baseOffset;
         } else {
             return false;
         }
@@ -1931,7 +1960,7 @@ public final class GLEmu {
         int tsize = typeSize(a.type);
         int stride = a.stride != 0 ? a.stride : a.size * tsize;
         int esize = elementSize(a.buffer);
-        int byteOffset = a.buffer.position() * esize + index * stride;
+        int byteOffset = a.position * esize + index * stride;
         for (int c = 0; c < a.size && c < 4; c++) {
             int at = byteOffset + c * tsize;
             float value;

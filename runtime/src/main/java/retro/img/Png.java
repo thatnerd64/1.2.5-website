@@ -19,7 +19,7 @@ public final class Png {
         public final int[] argb;
         public final boolean hasAlpha;
 
-        Image(int width, int height, int[] argb, boolean hasAlpha) {
+        public Image(int width, int height, int[] argb, boolean hasAlpha) {
             this.width = width;
             this.height = height;
             this.argb = argb;
@@ -254,7 +254,7 @@ public final class Png {
         private int to8(int v) {
             switch (bitDepth) {
                 case 16:
-                    return v >> 8;
+                    return (v * 255 + 32767) / 65535;
                 case 8:
                     return v;
                 case 4:

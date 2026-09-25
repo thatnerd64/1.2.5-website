@@ -6,7 +6,7 @@
 /build/
 /dist/
 .gradle/
-**/build/
+/*/build/
 *.class
 !/modpack/**/*.class
 

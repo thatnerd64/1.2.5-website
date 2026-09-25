@@ -138,7 +138,7 @@ public final class Resources {
         }
     }
 
-    static final class ResourceHandler extends java.net.URLStreamHandler {
+    public static final class ResourceHandler extends java.net.URLStreamHandler {
         static final ResourceHandler INSTANCE = new ResourceHandler();
 
         @Override
