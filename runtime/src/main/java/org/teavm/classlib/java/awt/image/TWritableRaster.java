@@ -6,6 +6,10 @@ public class TWritableRaster extends TRaster {
     }
 
     public void setSample(int x, int y, int b, int value) {
+        if (bytes != null) {
+            bytes[y * scanlineStride + x * pixelStride + bandOffsets[b]] = (byte) value;
+            return;
+        }
         int i = y * image.getWidth() + x;
         int argb = image.pixels[i];
         int shift = b == 0 ? 16 : b == 1 ? 8 : b == 2 ? 0 : 24;

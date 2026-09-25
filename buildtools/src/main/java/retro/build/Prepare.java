@@ -91,10 +91,14 @@ public final class Prepare {
             List<Path> libraries) throws IOException {
         Files.createDirectories(out.resolve("web"));
 
-        // 1. The game jar, with optional jar mods layered on top (like the classic "delete META-INF" install).
+        // 1. The game jar, with jar mods layered on top (like the classic "delete META-INF" install): first the
+        // modpack's own (modpack/jarmods), then the user's extras (input/jarmods), each in name order.
         Map<String, byte[]> gameEntries = readZip(jar);
-        if (Files.isDirectory(jarMods)) {
-            for (Path p : sortedChildren(jarMods)) {
+        for (Path dir : List.of(modpack.resolve("jarmods"), jarMods)) {
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            for (Path p : sortedChildren(dir)) {
                 if (ZIP_JAR.matcher(p.getFileName().toString()).matches()) {
                     log.add("jar mod: " + p.getFileName());
                     gameEntries.putAll(readZip(p));
@@ -188,12 +192,33 @@ public final class Prepare {
             }
             log.add("classes failing verification dropped: " + rejected.size());
 
-            // Missing types used in member signatures get empty stub classes: reflection metadata (all fields
-            // are reflectable) must be able to name them. Using them still fails lazily, as on a JVM.
+            // Missing types used in member signatures, and missing enclosing classes of nested classes, get
+            // empty stub classes: class metadata (all fields are reflectable; nested classes name their
+            // declaring class) must be able to name them. Using them still fails lazily, as on a JVM.
             Set<String> stubs = new TreeSet<>();
             for (byte[] bytes : classes.values()) {
                 new org.objectweb.asm.ClassReader(bytes).accept(new org.objectweb.asm.ClassVisitor(
                         org.objectweb.asm.Opcodes.ASM9) {
+                    String self;
+
+                    @Override
+                    public void visit(int version, int access, String name, String sig, String superName,
+                            String[] itfs) {
+                        self = name;
+                    }
+
+                    @Override
+                    public void visitOuterClass(String owner, String name, String desc) {
+                        check(org.objectweb.asm.Type.getObjectType(owner));
+                    }
+
+                    @Override
+                    public void visitInnerClass(String name, String outerName, String innerName, int access) {
+                        if (name.equals(self) && outerName != null) {
+                            check(org.objectweb.asm.Type.getObjectType(outerName));
+                        }
+                    }
+
                     void check(org.objectweb.asm.Type t) {
                         while (t.getSort() == org.objectweb.asm.Type.ARRAY) {
                             t = t.getElementType();
@@ -281,12 +306,11 @@ public final class Prepare {
 
         // As on a JVM, any class in a mod can be loaded by name (Forestry, for example, discovers its plugins by
         // listing its own jar). Minecraft's own classes are only loadable by name when referenced as above.
-        // Excluded: third-party libraries bundled inside mods, and jars FML finds no mod in.
+        // That includes jars FML finds no mod in: add-ons such as NEI's plugins and Forestry's IC2 crops are
+        // discovered by their host mod listing the mods folder. Excluded: third-party libraries bundled in mods.
         Set<String> modSources = new java.util.HashSet<>();
         for (ModSource mod : mods) {
-            if (!mod.modClasses.isEmpty()) {
-                modSources.add(mod.name);
-            }
+            modSources.add(mod.name);
         }
         for (var e : classOrigin.entrySet()) {
             String name = e.getKey();
@@ -297,7 +321,109 @@ public final class Prepare {
         }
 
         // Methods that may be looked up by name through reflection: those named by some string constant, and
-        // custom serialization hooks (called by our ObjectOutputStream/ObjectInputStream).
+        // custom serialization hooks (called by our ObjectOutputStream/ObjectInputStream). Short names (up to 3
+        // characters, i.e. obfuscated ones such as "a") are so common as strings (recipe patterns, etc.) that they
+        // would make most of the game reflectable; those count only in a method that itself looks methods up.
+        // Where the target class is a class literal (X.class.getDeclaredMethod("a", ...)), the name is tied to X
+        // (and its superclasses); otherwise it applies to every class.
+        Set<String> lookupStrings = new java.util.HashSet<>();
+        Map<String, Set<String>> lookupOwners = new HashMap<>();
+        for (byte[] bytes : classes.values()) {
+            new org.objectweb.asm.ClassReader(bytes).accept(new org.objectweb.asm.ClassVisitor(
+                    org.objectweb.asm.Opcodes.ASM9) {
+                @Override
+                public org.objectweb.asm.MethodVisitor visitMethod(int access, String name, String desc,
+                        String sig, String[] exc) {
+                    return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                        final Set<String> own = new java.util.HashSet<>();
+                        boolean enumerates;
+                        int index;
+                        int classLiteralAt = -2;
+                        String classLiteral;
+                        String pendingName;
+                        String pendingOwner;
+
+                        private void step() {
+                            index++;
+                        }
+
+                        @Override
+                        public void visitLdcInsn(Object value) {
+                            if (value instanceof org.objectweb.asm.Type
+                                    && ((org.objectweb.asm.Type) value).getSort() == org.objectweb.asm.Type.OBJECT) {
+                                classLiteral = ((org.objectweb.asm.Type) value).getInternalName();
+                                classLiteralAt = index;
+                            } else if (value instanceof String && ((String) value).length() <= 3) {
+                                own.add((String) value);
+                                // The name string counts as a pending lookup until the next getMethod call.
+                                pendingName = (String) value;
+                                pendingOwner = classLiteralAt == index - 1 ? classLiteral : null;
+                            }
+                            step();
+                        }
+
+                        @Override
+                        public void visitMethodInsn(int op, String owner, String mname, String mdesc,
+                                boolean itf) {
+                            if (owner.equals("java/lang/Class")) {
+                                if (mname.equals("getMethod") || mname.equals("getDeclaredMethod")) {
+                                    if (pendingName != null) {
+                                        if (pendingOwner != null) {
+                                            lookupOwners.computeIfAbsent(pendingName, k -> new java.util.HashSet<>())
+                                                    .add(pendingOwner);
+                                        } else {
+                                            lookupStrings.add(pendingName);
+                                        }
+                                        pendingName = null;
+                                    }
+                                } else if (mname.equals("getMethods") || mname.equals("getDeclaredMethods")) {
+                                    enumerates = true;
+                                }
+                            }
+                            step();
+                        }
+
+                        @Override
+                        public void visitInsn(int opcode) {
+                            step();
+                        }
+
+                        @Override
+                        public void visitIntInsn(int opcode, int operand) {
+                            step();
+                        }
+
+                        @Override
+                        public void visitVarInsn(int opcode, int var) {
+                            step();
+                        }
+
+                        @Override
+                        public void visitTypeInsn(int opcode, String type) {
+                            step();
+                        }
+
+                        @Override
+                        public void visitFieldInsn(int opcode, String owner, String fname, String fdesc) {
+                            step();
+                        }
+
+                        @Override
+                        public void visitJumpInsn(int opcode, org.objectweb.asm.Label label) {
+                            step();
+                        }
+
+                        @Override
+                        public void visitEnd() {
+                            if (enumerates) {
+                                // Names compared against getMethods() results: tied to no particular class.
+                                lookupStrings.addAll(own);
+                            }
+                        }
+                    };
+                }
+            }, org.objectweb.asm.ClassReader.SKIP_DEBUG | org.objectweb.asm.ClassReader.SKIP_FRAMES);
+        }
         List<String> reflectMethods = new ArrayList<>();
         for (var e : classes.entrySet()) {
             new org.objectweb.asm.ClassReader(e.getValue()).accept(new org.objectweb.asm.ClassVisitor(
@@ -307,7 +433,16 @@ public final class Prepare {
                         String sig, String[] exc) {
                     boolean serialHook = (name.equals("writeObject") && desc.equals("(Ljava/io/ObjectOutputStream;)V"))
                             || (name.equals("readObject") && desc.equals("(Ljava/io/ObjectInputStream;)V"));
-                    if (!name.startsWith("<") && (strings.contains(name) || serialHook)) {
+                    boolean named;
+                    if (name.length() > 3) {
+                        named = strings.contains(name);
+                    } else {
+                        named = lookupStrings.contains(name);
+                        for (String owner : lookupOwners.getOrDefault(name, Set.of())) {
+                            named |= hierarchy.isSubclass(owner, e.getKey());
+                        }
+                    }
+                    if (!name.startsWith("<") && (named || serialHook)) {
                         reflectMethods.add(e.getKey().replace('/', '.') + " " + name);
                     }
                     return null;

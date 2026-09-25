@@ -54,6 +54,28 @@ final class Patches {
 
     static final List<Redirect> REDIRECTS = new ArrayList<>();
 
+    /**
+     * Constructors TeaVM lacks, expressed through one it has: {@code owner.<init>(desc)} becomes a call to the
+     * static {@code helper} (same arguments, returns the single argument of {@code newDesc}) followed by
+     * {@code owner.<init>(newDesc)}. Works for {@code new X(...)} and {@code super(...)} alike.
+     */
+    record CtorAdapter(String owner, String desc, String helper, String helperName, String newDesc) {
+    }
+
+    static final List<CtorAdapter> CTOR_ADAPTERS = List.of(
+            new CtorAdapter("java/io/PrintWriter", "(Ljava/io/File;)V", "retro/compat/IoCompat", "writer",
+                    "(Ljava/io/Writer;)V"),
+            new CtorAdapter("java/io/PrintWriter", "(Ljava/lang/String;)V", "retro/compat/IoCompat", "writer",
+                    "(Ljava/io/Writer;)V"),
+            new CtorAdapter("java/io/PrintWriter", "(Ljava/io/File;Ljava/lang/String;)V", "retro/compat/IoCompat",
+                    "writer", "(Ljava/io/Writer;)V"),
+            new CtorAdapter("java/io/PrintWriter", "(Ljava/lang/String;Ljava/lang/String;)V",
+                    "retro/compat/IoCompat", "writer", "(Ljava/io/Writer;)V"),
+            new CtorAdapter("java/io/PrintStream", "(Ljava/io/File;)V", "retro/compat/IoCompat", "output",
+                    "(Ljava/io/OutputStream;)V"),
+            new CtorAdapter("java/io/PrintStream", "(Ljava/lang/String;)V", "retro/compat/IoCompat", "output",
+                    "(Ljava/io/OutputStream;)V"));
+
     static {
         // Classpath resources -> asset pack
         virtual(CLASS, false, "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;",
@@ -95,6 +117,8 @@ final class Patches {
         virtual(CLASS, false, "getPackage", "()Ljava/lang/Package;", sys, "classGetPackage");
         virtual(CLASS, false, "isAnonymousClass", "()Z", sys, "isAnonymousClass");
         virtual(CLASS, false, "getGenericSuperclass", "()Ljava/lang/reflect/Type;", sys, "getGenericSuperclass");
+        virtual("java/net/URL", false, "getContent", "()Ljava/lang/Object;", "retro/compat/IoCompat",
+                "urlGetContent");
         statik(LOADER, "getSystemResources", "(Ljava/lang/String;)Ljava/util/Enumeration;", sys, "getSystemResources");
 
         // java.lang.reflect.Field primitive accessors (TeaVM only has get/set)
@@ -164,6 +188,18 @@ final class Patches {
                 return new MethodVisitor(Opcodes.ASM9, mv) {
                     @Override
                     public void visitMethodInsn(int op, String owner, String mname, String mdesc, boolean itf) {
+                        if (op == Opcodes.INVOKESPECIAL && mname.equals("<init>")) {
+                            for (CtorAdapter a : CTOR_ADAPTERS) {
+                                if (a.owner.equals(owner) && a.desc.equals(mdesc)) {
+                                    String ret = a.newDesc.substring(1, a.newDesc.indexOf(')'));
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, a.helper, a.helperName,
+                                            mdesc.substring(0, mdesc.indexOf(')') + 1) + ret, false);
+                                    super.visitMethodInsn(Opcodes.INVOKESPECIAL, owner, "<init>", a.newDesc, false);
+                                    changed[0] = true;
+                                    return;
+                                }
+                            }
+                        }
                         Redirect r = find(op, owner, mname, mdesc, hierarchy);
                         if (r != null) {
                             String newDesc = r.isStatic ? mdesc : "(L" + r.owner + ";" + mdesc.substring(1);

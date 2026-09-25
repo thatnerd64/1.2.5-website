@@ -38,8 +38,38 @@ public class TBufferedImage extends TImage implements TRenderedImage {
 
     public TBufferedImage(TColorModel model, TWritableRaster raster, boolean premultiplied,
             Hashtable<?, ?> properties) {
-        this(raster.getWidth(), raster.getHeight(), TYPE_INT_ARGB);
-        System.arraycopy(raster.image.pixels, 0, pixels, 0, pixels.length);
+        this(raster.getWidth(), raster.getHeight(), model.hasAlpha() ? TYPE_INT_ARGB : TYPE_INT_RGB);
+        if (raster.bytes != null) {
+            // Backed by the raster's bytes: the ARGB ints are a working copy, synced around drawing.
+            byteRaster = raster;
+            this.raster = raster;
+            pullBytes();
+        } else {
+            System.arraycopy(raster.image.pixels, 0, pixels, 0, pixels.length);
+        }
+    }
+
+    /** Set when this image was created over an interleaved byte raster. */
+    private TWritableRaster byteRaster;
+
+    void pullBytes() {
+        if (byteRaster != null) {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    pixels[y * width + x] = byteRaster.readBytes(x, y);
+                }
+            }
+        }
+    }
+
+    void pushBytes() {
+        if (byteRaster != null) {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    byteRaster.writeBytes(x, y, pixels[y * width + x]);
+                }
+            }
+        }
     }
 
     /** Wraps existing ARGB pixel data (used by the PNG decoder). */
@@ -60,6 +90,7 @@ public class TBufferedImage extends TImage implements TRenderedImage {
     }
 
     public int[] argbPixels() {
+        pullBytes();
         return pixels;
     }
 
@@ -111,10 +142,14 @@ public class TBufferedImage extends TImage implements TRenderedImage {
         if (x < 0 || y < 0 || x >= width || y >= height) {
             throw new ArrayIndexOutOfBoundsException("Coordinate out of bounds!");
         }
+        if (byteRaster != null) {
+            return store(byteRaster.readBytes(x, y));
+        }
         return store(pixels[y * width + x]);
     }
 
     public int[] getRGB(int startX, int startY, int w, int h, int[] rgbArray, int offset, int scansize) {
+        pullBytes();
         if (rgbArray == null) {
             rgbArray = new int[offset + h * scansize];
         }
@@ -138,9 +173,13 @@ public class TBufferedImage extends TImage implements TRenderedImage {
             throw new ArrayIndexOutOfBoundsException("Coordinate out of bounds!");
         }
         pixels[y * width + x] = store(rgb);
+        if (byteRaster != null) {
+            byteRaster.writeBytes(x, y, pixels[y * width + x]);
+        }
     }
 
     public void setRGB(int startX, int startY, int w, int h, int[] rgbArray, int offset, int scansize) {
+        pullBytes();
         boolean alpha = hasAlpha();
         for (int y = 0; y < h; y++) {
             int dst = (startY + y) * width + startX;
@@ -153,6 +192,7 @@ public class TBufferedImage extends TImage implements TRenderedImage {
                 }
             }
         }
+        pushBytes();
     }
 
     public TWritableRaster getRaster() {
@@ -171,6 +211,7 @@ public class TBufferedImage extends TImage implements TRenderedImage {
     }
 
     public TBufferedImage getSubimage(int x, int y, int w, int h) {
+        pullBytes();
         TBufferedImage sub = new TBufferedImage(w, h, type);
         for (int j = 0; j < h; j++) {
             System.arraycopy(pixels, (y + j) * width + x, sub.pixels, j * w, w);
@@ -184,6 +225,7 @@ public class TBufferedImage extends TImage implements TRenderedImage {
     }
 
     public TGraphics2D createGraphics() {
+        pullBytes();
         return new TBufferedImageGraphics(this);
     }
 
