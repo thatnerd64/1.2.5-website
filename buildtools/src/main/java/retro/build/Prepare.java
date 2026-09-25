@@ -169,12 +169,24 @@ public final class Prepare {
                     unloadable.add(name);
                 }
             }
+            // Classes a JVM would reject at verification time (they need a missing class to type-check).
+            // Checked before anything is dropped, so the verifier sees every class a desktop JVM would.
+            Verification verification = new Verification(classes, loadability);
+            Set<String> rejected = new TreeSet<>(verification.run());
+            rejected.removeAll(unloadable);
             for (String name : unloadable) {
                 classes.remove(name);
                 byName.remove(name.replace('/', '.'));
                 log.add("  unloadable (missing supertype): " + name + " from " + classOrigin.get(name));
             }
             log.add("unloadable classes dropped: " + unloadable.size());
+            for (String name : rejected) {
+                classes.remove(name);
+                byName.remove(name.replace('/', '.'));
+                log.add("  fails verification (needs " + verification.reason(name) + "): " + name + " from "
+                        + classOrigin.get(name));
+            }
+            log.add("classes failing verification dropped: " + rejected.size());
 
             // Missing types used in member signatures get empty stub classes: reflection metadata (all fields
             // are reflectable) must be able to name them. Using them still fails lazily, as on a JVM.

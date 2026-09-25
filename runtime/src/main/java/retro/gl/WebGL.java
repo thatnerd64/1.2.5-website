@@ -166,5 +166,8 @@ public interface WebGL extends JSObject {
 
     void renderbufferStorage(int target, int internalformat, int width, int height);
 
+    void blitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1,
+            int mask, int filter);
+
     int getParameteri(int pname);
 }

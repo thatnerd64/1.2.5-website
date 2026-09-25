@@ -222,6 +222,12 @@ public final class GLEmu {
     private static final List<JSObject> framebuffers = new ArrayList<>();
     private static final List<JSObject> renderbuffers = new ArrayList<>();
     private static int boundFramebuffer;
+    private static JSObject boundRenderbuffer;
+    private static JSObject screenFramebuffer;
+    private static JSObject screenColor;
+    private static JSObject screenDepth;
+    private static int screenWidth;
+    private static int screenHeight;
 
     private GLEmu() {
     }
@@ -2409,7 +2415,7 @@ public final class GLEmu {
 
     public static void bindFramebuffer(int target, int id) {
         boundFramebuffer = id;
-        gl.bindFramebuffer(0x8D40, id > 0 && id < framebuffers.size() ? framebuffers.get(id) : null);
+        gl.bindFramebuffer(0x8D40, id > 0 && id < framebuffers.size() ? framebuffers.get(id) : screenFramebuffer);
     }
 
     public static void framebufferTexture2D(int target, int attachment, int textarget, int texture, int level) {
@@ -2429,7 +2435,8 @@ public final class GLEmu {
     }
 
     public static void bindRenderbuffer(int target, int id) {
-        gl.bindRenderbuffer(0x8D41, id > 0 && id < renderbuffers.size() ? renderbuffers.get(id) : null);
+        boundRenderbuffer = id > 0 && id < renderbuffers.size() ? renderbuffers.get(id) : null;
+        gl.bindRenderbuffer(0x8D41, boundRenderbuffer);
     }
 
     public static void renderbufferStorage(int target, int internalFormat, int width, int height) {
@@ -2463,10 +2470,46 @@ public final class GLEmu {
         return gl.checkFramebufferStatus(0x8D40);
     }
 
-    /** Called by Display after the default framebuffer has been resized. */
-    static void resetFrame() {
-        if (boundFramebuffer != 0) {
-            bindFramebuffer(0x8D40, 0);
+    /**
+     * The game's "default framebuffer" (id 0) is an offscreen framebuffer, copied to the canvas once per frame by
+     * {@link #present()}. Drawing straight to the canvas would let the browser show half-drawn frames, because a
+     * game frame can span several browser tasks (green threads yield while it is being drawn).
+     */
+    static void resizeScreen(int width, int height) {
+        if (screenFramebuffer == null) {
+            screenFramebuffer = gl.createFramebuffer();
+            screenColor = gl.createRenderbuffer();
+            screenDepth = gl.createRenderbuffer();
+        }
+        screenWidth = width;
+        screenHeight = height;
+        gl.bindRenderbuffer(0x8D41, screenColor);
+        gl.renderbufferStorage(0x8D41, 0x8051, width, height);
+        gl.bindRenderbuffer(0x8D41, screenDepth);
+        gl.renderbufferStorage(0x8D41, 0x88F0, width, height);
+        gl.bindRenderbuffer(0x8D41, boundRenderbuffer);
+        gl.bindFramebuffer(0x8D40, screenFramebuffer);
+        gl.framebufferRenderbuffer(0x8D40, 0x8CE0, 0x8D41, screenColor);
+        gl.framebufferRenderbuffer(0x8D40, 0x821A, 0x8D41, screenDepth);
+        gl.bindFramebuffer(0x8D40, boundFramebuffer > 0 && boundFramebuffer < framebuffers.size()
+                ? framebuffers.get(boundFramebuffer) : screenFramebuffer);
+    }
+
+    /** Copies the finished frame to the canvas; the browser presents it when the current task ends. */
+    static void present() {
+        if (screenFramebuffer == null) {
+            return;
+        }
+        if (scissorTest) {
+            gl.disable(0xC11);
+        }
+        gl.bindFramebuffer(0x8CA8, screenFramebuffer);
+        gl.bindFramebuffer(0x8CA9, null);
+        gl.blitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, 0x4000, 0x2600);
+        gl.bindFramebuffer(0x8D40, boundFramebuffer > 0 && boundFramebuffer < framebuffers.size()
+                ? framebuffers.get(boundFramebuffer) : screenFramebuffer);
+        if (scissorTest) {
+            gl.enable(0xC11);
         }
     }
 }

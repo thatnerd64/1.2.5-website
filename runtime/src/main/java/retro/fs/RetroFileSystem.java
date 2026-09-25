@@ -380,6 +380,9 @@ public final class RetroFileSystem implements VirtualFileSystem {
                 throw new IOException("File is read-only");
             }
             ensureCapacity(pos + limit);
+            if (pos > file.size) {
+                java.util.Arrays.fill(file.data, file.size, pos, (byte) 0);
+            }
             System.arraycopy(buffer, offset, file.data, pos, limit);
             pos += limit;
             if (pos > file.size) {

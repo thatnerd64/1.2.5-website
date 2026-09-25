@@ -76,10 +76,10 @@ public final class Display {
         int packed = syncSize(canvas, scale);
         int w = packed >>> 16;
         int h = packed & 0xFFFF;
-        if (w != width || h != height) {
+        if (w != width || h != height || !created) {
             width = w;
             height = h;
-            GLEmu.resetFrame();
+            GLEmu.resizeScreen(w, h);
         }
     }
 
@@ -99,6 +99,9 @@ public final class Display {
 
     /** Ends the frame: lets the browser present it and handle events, then continues on the next frame. */
     public static void update() {
+        if (created) {
+            GLEmu.present();
+        }
         nextFrame();
         if (created) {
             updateSize();

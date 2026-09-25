@@ -14,7 +14,8 @@ public final class Input {
             + "if (window.__retroInput) return;"
             + "var canvas = document.getElementById('game');"
             + "var S = window.__retroInput = { keys: new Uint8Array(256), keyQueue: [], mouseQueue: [],"
-            + "  buttons: [0,0,0,0,0,0,0,0], x: 0, y: 0, dx: 0, dy: 0, wheel: 0, grabbed: false, repeat: false,"
+            + "  buttons: [0,0,0,0,0,0,0,0], pending: [0,0,0,0,0,0,0,0], x: 0, y: 0, dx: 0, dy: 0, wheel: 0,"
+            + "  grabbed: false, repeat: false,"
             + "  focus: true };"
             + "var map = {Escape:1,Digit1:2,Digit2:3,Digit3:4,Digit4:5,Digit5:6,Digit6:7,Digit7:8,Digit8:9,Digit9:10,"
             + "Digit0:11,Minus:12,Equal:13,Backspace:14,Tab:15,KeyQ:16,KeyW:17,KeyE:18,KeyR:19,KeyT:20,KeyY:21,"
@@ -74,7 +75,7 @@ public final class Input {
             + "  e.preventDefault(); canvas.focus && canvas.focus();"
             + "  if (window.__retroAudioResume) window.__retroAudioResume();"
             + "  if (S.grabbed && document.pointerLockElement !== canvas) { S.requestLock(); }"
-            + "  pos(e); var b = btn(e.button); S.buttons[b] = 1;"
+            + "  pos(e); var b = btn(e.button); S.buttons[b] = 1; S.pending[b]++;"
             + "  S.mouseQueue.push([b, 1, S.x, S.y, 0, 0, 0]);"
             + "});"
             + "window.addEventListener('mouseup', function(e) {"
@@ -101,10 +102,14 @@ public final class Input {
             + "  S.wheel += d; S.mouseQueue.push([-1, 0, S.x, S.y, d, 0, 0]);"
             + "}, { passive: false });"
             + "canvas.addEventListener('contextmenu', function(e) { e.preventDefault(); });"
+            + "function lockPlain() {"
+            + "  try { var p = canvas.requestPointerLock(); if (p && p.catch) p.catch(function() {}); } catch (e) {}"
+            + "}"
             + "S.requestLock = function() {"
+            // Without a user gesture (e.g. when a world finishes loading) this fails; the next click locks.
             + "  try { var p = canvas.requestPointerLock({ unadjustedMovement: true });"
-            + "    if (p && p.catch) p.catch(function() { try { canvas.requestPointerLock(); } catch (e) {} }); }"
-            + "  catch (e) { try { canvas.requestPointerLock(); } catch (e2) {} }"
+            + "    if (p && p.catch) p.catch(function(err) { if (err && err.name === 'NotSupportedError') lockPlain(); }); }"
+            + "  catch (e) { lockPlain(); }"
             + "};"
             + "document.addEventListener('pointerlockchange', function() {"
             + "  if (document.pointerLockElement !== canvas && S.grabbed) {"
@@ -142,8 +147,9 @@ public final class Input {
     }
 
     @JSBody(params = "out", script = ""
-            + "var e = window.__retroInput.mouseQueue.shift();"
+            + "var S = window.__retroInput, e = S.mouseQueue.shift();"
             + "if (!e) return false;"
+            + "if (e[1] && e[0] >= 0 && S.pending[e[0]] > 0) S.pending[e[0]]--;"
             + "for (var i = 0; i < 7; i++) out[i] = e[i];"
             + "return true;")
     private static native boolean nextMouseImpl(@org.teavm.jso.JSByRef int[] out);
@@ -163,7 +169,11 @@ public final class Input {
     @JSBody(script = "var S = window.__retroInput, d = S.wheel; S.wheel = 0; return d;")
     public static native int takeWheel();
 
-    @JSBody(params = "b", script = "return window.__retroInput.buttons[b] === 1;")
+    /**
+     * A button also counts as down until the game has read its press event: GUI code such as GuiSlot discards
+     * queued events while no button is down, which would lose quick clicks (press and release within one frame).
+     */
+    @JSBody(params = "b", script = "var S = window.__retroInput; return S.buttons[b] === 1 || S.pending[b] > 0;")
     public static native boolean isButtonDown(int b);
 
     @JSBody(params = "on", script = ""
