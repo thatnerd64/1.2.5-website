@@ -1,0 +1,22 @@
+name: CI
+
+# Compiles the build tools, TeaVM plugin and browser runtime. The game itself is not built here: that needs
+# each user's own minecraft.jar (see input/README.md), which is never stored in this repository.
+on:
+  push:
+  pull_request:
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile build tools, TeaVM plugin and runtime
+        run: ./gradlew --no-daemon :buildtools:classes :teavm-plugin:jar :runtime:jar
+      - name: Check web assets
+        run: node --check web/js/al.js

@@ -1,0 +1,158 @@
+// Minecraft 1.2.5 + Forge for the browser, compiled with TeaVM.
+//
+//   ./gradlew build        -> dist/ (static site: open with any web server)
+//   ./gradlew build -PdevBuild=true   (faster, readable JS)
+//
+// Inputs: input/minecraft.jar (your own jar, never committed) and modpack/ (mods + configs).
+
+def teavmVersion = property('teavmVersion')
+def asmVersion = property('asmVersion')
+def devBuild = (findProperty('devBuild') ?: 'false').toBoolean()
+
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs += ['-Xlint:-options', '-nowarn']
+    }
+}
+
+project(':buildtools') {
+    dependencies {
+        implementation "org.ow2.asm:asm:$asmVersion"
+        implementation "org.ow2.asm:asm-commons:$asmVersion"
+        implementation "org.teavm:teavm-tooling:$teavmVersion"
+    }
+}
+
+project(':teavm-plugin') {
+    dependencies {
+        compileOnly "org.teavm:teavm-core:$teavmVersion"
+        compileOnly "org.teavm:teavm-extension-spi:$teavmVersion"
+        compileOnly "org.teavm:teavm-classlib:$teavmVersion"
+        compileOnly "org.teavm:teavm-interop:$teavmVersion"
+        compileOnly "org.teavm:teavm-relocated-libs-hppc:$teavmVersion"
+    }
+}
+
+// Browser-side code: LWJGL/AWT/javax shims, file system, boot. Compiled only by TeaVM, never run on a JVM.
+project(':runtime') {
+    dependencies {
+        compileOnly "org.teavm:teavm-classlib:$teavmVersion"
+        compileOnly "org.teavm:teavm-jso-apis:$teavmVersion"
+        compileOnly "org.teavm:teavm-interop:$teavmVersion"
+        compileOnly "org.teavm:teavm-platform:$teavmVersion"
+        compileOnly "org.teavm:teavm-core:$teavmVersion"
+    }
+}
+
+def prepared = layout.buildDirectory.dir('prepared')
+def gameJar = prepared.map { it.file('game.jar') }
+
+// Merge the user's jar with the modpack and patch it for the browser.
+tasks.register('prepareGame', JavaExec) {
+    group = 'build'
+    description = 'Merges input/minecraft.jar with modpack/mods and patches it for TeaVM.'
+    dependsOn ':buildtools:classes', ':runtime:jar'
+    classpath = project(':buildtools').sourceSets.main.runtimeClasspath
+    mainClass = 'retro.build.Prepare'
+    inputs.dir('modpack')
+    inputs.dir('input')
+    outputs.dir(prepared)
+    maxHeapSize = '2g'
+    doFirst { delete prepared }
+    args '--jar', file('input/minecraft.jar'),
+         '--jarmods', file('input/jarmods'),
+         '--modpack', file('modpack'),
+         '--resources', file('input/resources'),
+         '--out', prepared.get().asFile,
+         '--exclude-mods', (findProperty('excludeMods') ?: '')
+    inputs.files(project(':runtime').tasks.named('jar'))
+    doFirst {
+        // Classes the browser runtime provides (TeaVM class library + our shims), for the loadability check.
+        def libs = [project(':runtime').tasks.jar.archiveFile.get().asFile] + configurations.teavmClasslib.files
+        args '--libraries', libs.join(File.pathSeparator)
+    }
+}
+
+// Code that must be compiled against the game's own classes (e.g. the FML class loader replacement).
+project(':gameglue') {
+    dependencies {
+        compileOnly files(gameJar)
+        compileOnly project(':runtime')
+        compileOnly "org.teavm:teavm-classlib:$teavmVersion"
+    }
+    tasks.named('compileJava') { dependsOn rootProject.tasks.named('prepareGame') }
+}
+
+configurations {
+    teavmClasslib
+}
+dependencies {
+    teavmClasslib "org.teavm:teavm-classlib:$teavmVersion"
+    teavmClasslib "org.teavm:teavm-jso-apis:$teavmVersion"
+    teavmClasslib "org.teavm:teavm-jso-impl:$teavmVersion"
+    teavmClasslib "org.teavm:teavm-platform:$teavmVersion"
+}
+
+def teavmOut = layout.buildDirectory.dir('teavm')
+
+tasks.register('compileWeb', JavaExec) {
+    group = 'build'
+    description = 'Compiles the game to JavaScript with TeaVM.'
+    dependsOn ':runtime:jar', ':gameglue:jar', ':teavm-plugin:jar', 'prepareGame'
+    // TeaVM discovers its plugins (including the class library's own) on the tool's JVM classpath.
+    // The plugin jar goes first: it also carries a patched copy of one TeaVM compiler class.
+    classpath = files(project(':teavm-plugin').tasks.named('jar')) +
+            project(':buildtools').sourceSets.main.runtimeClasspath + configurations.teavmClasslib
+    mainClass = 'retro.build.Compile'
+    maxHeapSize = '10g'
+    inputs.files(gameJar)
+    inputs.property('devBuild', devBuild)
+    inputs.files(project(':teavm-plugin').tasks.named('jar'))
+    inputs.files(project(':runtime').tasks.named('jar'), project(':gameglue').tasks.named('jar'))
+    outputs.dir(teavmOut)
+    doFirst {
+        systemProperty 'retro.classes', prepared.get().file('classes.txt').asFile
+        systemProperty 'retro.byname', prepared.get().file('byname.txt').asFile
+        systemProperty 'retro.methods', prepared.get().file('methods.txt').asFile
+        systemProperty 'retro.unresolved', layout.buildDirectory.file('unresolved.txt').get().asFile
+        def cp = [project(':runtime').tasks.jar.archiveFile.get().asFile,
+                  project(':gameglue').tasks.jar.archiveFile.get().asFile,
+                  gameJar.get().asFile] + configurations.teavmClasslib.files
+        args '--out', teavmOut.get().asFile,
+             '--classpath', cp.join(File.pathSeparator),
+             '--dev', devBuild,
+             '--cache', layout.buildDirectory.dir('teavm-cache').get().asFile
+    }
+}
+
+tasks.register('dist', Sync) {
+    group = 'build'
+    description = 'Assembles the static web site in dist/.'
+    dependsOn 'compileWeb', 'prepareGame'
+    from('web')
+    from(teavmOut)
+    from(prepared.map { it.dir('web') })
+    into 'dist'
+}
+
+tasks.register('build') {
+    group = 'build'
+    dependsOn 'dist'
+}
+
+tasks.register('clean', Delete) {
+    group = 'build'
+    delete layout.buildDirectory, 'dist'
+}

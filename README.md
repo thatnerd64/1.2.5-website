@@ -1,201 +1,87 @@
-# Minecraft 1.2.5 Browser
+# Minecraft 1.2.5 + Forge in the browser (Full Retro)
 
-## What is it
+Minecraft 1.2.5 with Minecraft Forge and the **Full Retro** modpack's mods and configs, compiled from Java
+bytecode to JavaScript with [TeaVM](https://teavm.org) and running in any modern browser with WebGL 2. The
+game has no Java plugin, no JVM emulator and no server: it is a static web page.
 
-Thanks to [CheerpJ 4.2](https://cheerpj.com), this project runs Minecraft 1.2.5 in the browser, without the requirement of having the JVM locally installed on the computer.
+> Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.
+> **This repository contains no Minecraft code or assets.** Each person builds the game from their own
+> `minecraft.jar`; see [`input/README.md`](input/README.md).
 
-This is a simplified implementation inspired by [Browsercraft](https://github.com/leaningtech/browsercraft) that runs the unmodified Minecraft 1.2.5 client JAR from a local file.
-
-## Features
-
-- **Unmodified Minecraft 1.2.5**: Runs the original Minecraft client JAR untouched
-- **Local JAR Storage**: Uses a local JAR file for faster loading
-- **Mod Support**: Place Forge-compatible mods in the `minecraft/mods` folder
-- **Simple Setup**: Just download the JAR and run
-- **Browser-based**: No Java installation required
-- **Offline Mode**: Uses an embedded `.minecraft` directory to avoid external downloads
-- **Custom Multiplayer**: Connect to servers with any username without online authentication
-
-## Notes
-
-This is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft. You must have a legal copy of Minecraft 1.2.5 to use this application.
-
-## Quick Start
-
-### Prerequisites
-- Modern web browser with WebGL support (Chrome, Firefox, Safari, Edge)
-- Node.js (for development server)
-- Legal copy of Minecraft 1.2.5
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/minecraft-1.2.5-browser.git
-   cd minecraft-1.2.5-browser
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Setup Minecraft JAR**
-
-Download the Minecraft 1.2.5 client JAR from a legal source and place it as `minecraft/bin/minecraft-1.2.5.jar`
-
-LWJGL native libraries must be hosted at `/cheerpj-natives/natives`.
-
-4. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open in browser**
-   Navigate to `http://localhost:8080` in your web browser.
-
-6. **Play Minecraft**
-   - Accept the Minecraft EULA
-   - (Optional) Enter a server address and port to join multiplayer
-   - Click "Play Minecraft!" to start the game
-
-## JAR File Setup
-
-The application requires the Minecraft 1.2.5 client JAR file to be placed in the `minecraft/bin/` folder.
-
-### Manual Setup
-1. Download the Minecraft 1.2.5 client JAR from a legal source
-2. Place it in the `minecraft/bin/` folder
-3. Rename it to `minecraft-1.2.5.jar`
-
-- **Path**: `minecraft/bin/minecraft-1.2.5.jar`
-- **Size**: Approximately 4-5 MB
-- **Source**: Official Mojang servers (via download script)
-
-## Mod Support (Core Minecraft Folder)
-
-To add mods to your Minecraft installation:
-
-1. **Create mods folder** inside the minecraft folder (if it doesn't exist):
-   ```bash
-   mkdir -p minecraft/mods
-   ```
-
-2. **Add mod JAR files**:
-   Place any Forge-compatible mod JAR files for Minecraft 1.2.5 in the `minecraft/mods` folder.
-
-3. **Restart the game**:
-   The mods will be loaded automatically when you start Minecraft.
-
-### Supported Mods
-- Any Forge-compatible mods for Minecraft 1.2.5
-- Mods should be in JAR format
-- Place them directly in the `minecraft/mods` folder
-
-## How it Works
-
-This project uses [CheerpJ](https://cheerpj.com), a Java-to-JavaScript compiler that allows Java applications to run in the browser. The implementation:
-
-1. **Loads Local JAR**: Fetches the Minecraft 1.2.5 client JAR from the local `minecraft/bin/` folder
-2. **Virtual Filesystem**: Writes the JAR into CheerpJ's virtual filesystem at `/app/.minecraft/bin/minecraft-1.2.5.jar`
-3. **Initializes CheerpJ**: Sets up the Java runtime environment in the browser
-4. **Runs Minecraft**: Executes the unmodified Minecraft client JAR with LWJGL libraries
-5. **Loads Mods**: Automatically loads any mods placed in the `minecraft/mods` folder
-
-### Technical Details
-
-The application uses CheerpJ's virtual filesystem to store and run the JAR file. The LWJGL libraries are stored alongside the client in the CheerpJ filesystem. The process is:
-
-1. The JAR file is loaded from `minecraft/bin/minecraft-1.2.5.jar` on the web server
-2. It's written to `/app/.minecraft/bin/minecraft-1.2.5.jar` in CheerpJ's virtual filesystem
-3. CheerpJ runs Minecraft with the classpath: `/app/.minecraft/bin/minecraft-1.2.5.jar:/app/lwjgl-2.9.3.jar:/app/lwjgl_util-2.9.3.jar`
-
-## File Structure
+## How it works
 
 ```
-minecraft-1.2.5/
-├── index.html              # Main application
-├── minecraft/              # Core Minecraft folder (mirrors .minecraft)
-│   ├── bin/
-│   │   └── minecraft-1.2.5.jar  # Minecraft client JAR (download required)
-│   └── mods/                   # Place your mod JAR files here
-├── lib/                     # Optional LWJGL libraries
-│   └── lwjgl/lwjgl-*.jar
-├── package.json            # Node.js dependencies
-└── README.md                # This file
+input/minecraft.jar  ─┐                        ┌─ runtime/   LWJGL → WebGL 2 / Web Audio, AWT, ImageIO,
+(your Forge jar)      │   buildtools/Prepare   │             file system (IndexedDB), sockets (WebSocket)
+modpack/mods/*        ├─► merge + patch ───────┤
+modpack/config/*      │   bytecode             ├─ gameglue/  FML class-loader replacement, entry point
+                      ┘                        │
+                                               └─► TeaVM ─► dist/classes.js + assets.pak + fs.pak
 ```
 
-## Troubleshooting
+* **Prepare** (`buildtools/`) merges your jar and every mod in the order FML's class loader would see them,
+  redirects the handful of JDK calls TeaVM lacks, applies runtime class patches ahead of time (e.g.
+  LumySkinPatch), drops classes that could never load on a JVM (missing supertypes), and packs resources and
+  the initial `.minecraft` folder (configs, mod list, sounds).
+* **Runtime** (`runtime/`) implements the platform the game expects:
+  * `org.lwjgl.opengl.*`: an OpenGL 1.x fixed-function emulator on WebGL 2 (matrix stacks, lighting, fog,
+    alpha test, texgen, display lists compiled to VBOs/VAOs, client-side vertex arrays, FBOs).
+  * `org.lwjgl.input.*`: keyboard and mouse with pointer lock. `org.lwjgl.openal.*`: OpenAL on Web Audio.
+  * `java.awt.*`, `javax.imageio.*`: the imaging subset Minecraft and mods use (PNG codec included).
+  * `java.io.File`: an in-memory file system; everything the game writes (worlds, options, edited configs)
+    is saved to IndexedDB.
+  * `java.util.logging`, `java.net.Socket` (over a WebSocket proxy), `MessageDigest`, charsets and more.
+* **FML** runs unmodified apart from its class loader: it scans `.minecraft/mods` (stub jars listing each mod's
+  entries) and instantiates mods through `Class.forName`, so load order, configs and logging behave as on
+  desktop.
+* **teavm-plugin/** configures TeaVM (reflection for game classes, `Class.forName` for mod classes,
+  JVM-style lazy linking for optional cross-mod references) and carries fixes for four TeaVM 0.15 compiler bugs
+  hit by this code base (each marked "Modified for Minecraft Web").
 
-- Use the CheerpJ 4.2 loader only.
-- Use the "Reset CheerpJ Storage" button if the filesystem gets into a bad state.
-- Use `?mods=none` to test vanilla, then add mods incrementally.
-- If you see `java/util/Hashtable$EntrySet`, identify and replace or remove the offending mod (it references non-public JDK internals).
+## Building
 
-### Common Issues
+Requirements: JDK 17+ (21 recommended), about 12 GB of free RAM for the TeaVM step, and your own jar.
 
-**JAR File Not Found**
-- Ensure the file exists at `minecraft/bin/minecraft-1.2.5.jar`
-- Check file permissions
-
-**CheerpJ Loading Fails**
-- Ensure you have a modern browser with WebGL support
-- Check browser console for error messages
-- Try refreshing the page
-
-**Game Won't Start**
-- Check that you've accepted the Minecraft EULA
-- Verify the JAR file exists and is not corrupted
-- Check browser console for error messages
-- Ensure JavaScript is enabled in your browser
-
-**SHA1 digest error / signature mismatch**
-- Occurs when the JAR's `META-INF` signatures don't match its contents
-- Removing the `META-INF` folder or running with the `-noverify` JVM flag resolves this
-- The web launcher includes `-noverify` by default
-
-**404 Errors for LWJGL**
-- This is normal - LWJGL libraries are provided internally by CheerpJ
-- The game should still work despite these errors in the network tab
-
-**Mods Not Loading**
-- Verify mods are compatible with Minecraft 1.2.5
-- Ensure mods are in JAR format
-- Check that mods are placed directly in the `minecraft/mods` folder
-
-**Performance Issues**
-- Close other browser tabs
-- Use a more powerful computer
-- Ensure you have sufficient RAM available
-- Try using Chrome or Firefox for best performance
-
-## Development
-
-### Local Development
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production (not implemented yet)
+```sh
+cp /path/to/.minecraft/bin/minecraft.jar input/minecraft.jar     # Forge-patched 1.2.5 client
+cp -r /path/to/.minecraft/resources input/resources             # optional: sounds and music
+./gradlew build                                                  # -> dist/
 ```
 
-### Adding Features
-This is a minimal implementation. To add features:
-- Modify `index.html` for UI changes
-- Add mod loading logic if needed
-- Customize CheerpJ configuration in the JavaScript
+`./gradlew build -PdevBuild=true` produces readable (unminified) JavaScript for debugging.
+`-PexcludeMods=CraftPresence-Forge-1.2.5-Release-1.9.6.jar,...` leaves mods out.
 
-## Legal Notice
+Serve `dist/` with any static web server and open it:
 
-This project is for educational purposes. You must:
-- Own a legal copy of Minecraft 1.2.5
-- Comply with the Minecraft EULA
-- Respect Mojang's intellectual property rights
+```sh
+cd dist && python3 -m http.server 8080      # then open http://localhost:8080
+```
 
-## License
+`dist/` contains code compiled from your `minecraft.jar`, so it is yours to use; don't publish it.
 
-This project is licensed under the MIT License.
+## Playing
 
-## Acknowledgments
+* Enter a username and press **Play**. Worlds and settings persist in the browser (IndexedDB); the launcher
+  can export them as a zip or delete them.
+* Click the game to capture the mouse; **Esc** releases it and opens the menu. **F11** toggles full screen.
+  **F2** screenshots are also downloaded by the browser.
+* Multiplayer: run [`tools/ws-proxy.js`](tools/ws-proxy.js) (Node.js + `ws`), enter its `ws://` / `wss://`
+  address in the launcher, then use Minecraft's normal Multiplayer screen.
 
-- [CheerpJ](https://cheerpj.com) for making Java applications run in the browser
-- [Browsercraft](https://github.com/leaningtech/browsercraft) for the original inspiration
-- Mojang for Minecraft (this is not an official product) 
+## The modpack
+
+[`modpack/`](modpack/) is the Full Retro `.minecraft` content: `mods/`, `config/`, per-mod folders and
+`options.txt`. See [`modpack/README.md`](modpack/README.md) for the mod list, status and how to add mods.
+
+## Repository layout
+
+| Path | Purpose |
+|------|---------|
+| `buildtools/` | Prepare step (merge, patch, pack) and TeaVM driver |
+| `teavm-plugin/` | TeaVM policies/plugins and patched TeaVM classes |
+| `runtime/` | Browser platform: LWJGL, AWT, ImageIO, file system, audio, input, JDK gaps |
+| `gameglue/` | Code compiled against the game: entry point, FML class loader |
+| `web/` | Page, launcher, Web Audio OpenAL (`js/al.js`) |
+| `modpack/` | Full Retro mods and configs |
+| `input/` | Your `minecraft.jar` and resources (git-ignored) |
+| `tools/` | WebSocket → TCP proxy for multiplayer |
