@@ -1,0 +1,82 @@
+name: Build and deploy
+
+# Builds the game (dist/) on a GitHub-hosted runner and publishes it with GitHub Pages at
+# https://<owner>.github.io/<repository>/. Pull requests only build, as a check.
+#
+# The build needs a Forge-patched minecraft.jar and, for sound, Minecraft's resources folder. They are not in
+# the current tree; this workflow takes them from commit 3989699, where the repository owner uploaded them
+# (the same files as the Full Retro instance's .minecraft/bin/minecraft.jar and .minecraft/resources).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  INPUT_COMMIT: 3989699a29c249824a948b85ead69236692eafc8
+  JAR_SHA1: 2ab4870e2613c491dab04eccd03fc253671326b3
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch minecraft.jar and sounds into input/
+        run: |
+          git fetch --no-tags --depth=1 origin "$INPUT_COMMIT"
+          git show "$INPUT_COMMIT:minecraft/bin/minecraft-1.2.5.jar" > input/minecraft.jar
+          echo "$JAR_SHA1  input/minecraft.jar" | sha1sum -c
+          git archive "$INPUT_COMMIT" minecraft/resources/sound minecraft/resources/newsound \
+              minecraft/resources/streaming minecraft/resources/music minecraft/resources/newmusic \
+            | tar -x -C "$RUNNER_TEMP"
+          mkdir -p input/resources
+          cp -r "$RUNNER_TEMP/minecraft/resources/." input/resources/
+          # these two are mod sounds, shipped from modpack/resources instead
+          rm -rf input/resources/newsound/ic2nuclearControl input/resources/newsound/thaumcraft
+
+      # The TeaVM step takes an 11 GB heap on a 16 GB runner; swap keeps the OOM killer away from Gradle.
+      - name: Add swap
+        continue-on-error: true
+        run: |
+          sudo fallocate -l 8G /mnt/build.swap
+          sudo chmod 600 /mnt/build.swap
+          sudo mkswap /mnt/build.swap
+          sudo swapon /mnt/build.swap
+          free -h
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew --no-daemon build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
