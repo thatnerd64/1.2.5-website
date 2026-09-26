@@ -30,12 +30,12 @@ modpack/config/*      │   bytecode             ├─ gameglue/  FML class-loa
   * `java.awt.*`, `javax.imageio.*`: the imaging subset Minecraft and mods use (PNG codec included).
   * `java.io.File`: an in-memory file system; everything the game writes (worlds, options, edited configs)
     is saved to IndexedDB.
-  * `java.util.logging`, `java.net.Socket` (over a WebSocket proxy), `MessageDigest`, charsets and more.
+  * `java.util.logging`, `java.net.Socket` (over a WebSocket relay, see [Multiplayer](#multiplayer)), `MessageDigest`, charsets and more.
 * **FML** runs unmodified apart from its class loader: it scans `.minecraft/mods` (stub jars listing each mod's
   entries) and instantiates mods through `Class.forName`, so load order, configs and logging behave as on
   desktop.
 * **teavm-plugin/** configures TeaVM (reflection for game classes, `Class.forName` for mod classes,
-  JVM-style lazy linking for optional cross-mod references) and carries fixes for four TeaVM 0.15 compiler bugs
+  JVM-style lazy linking for optional cross-mod references) and carries fixes for five TeaVM 0.15 compiler bugs
   hit by this code base (each marked "Modified for Minecraft Web").
 
 ## Building
@@ -65,8 +65,60 @@ cd dist && python3 -m http.server 8080      # then open http://localhost:8080
   can export them as a zip or delete them.
 * Click the game to capture the mouse; **Esc** releases it and opens the menu. **F11** toggles full screen.
   **F2** screenshots are also downloaded by the browser.
-* Multiplayer: run [`tools/ws-proxy.js`](tools/ws-proxy.js) (Node.js + `ws`), enter its `ws://` / `wss://`
-  address in the launcher, then use Minecraft's normal Multiplayer screen.
+* Multiplayer uses Minecraft's normal Multiplayer screen; see [Multiplayer](#multiplayer) below.
+
+## Multiplayer
+
+The browser client joins ordinary Minecraft 1.2.5 servers running the original Java server code (vanilla, or
+Forge with Full Retro's server mods). Browsers can't open TCP connections, so a small relay,
+[`tools/ws-proxy.js`](tools/ws-proxy.js), carries the game's connection over a WebSocket. It needs Node.js 16+
+and nothing else. The packets themselves are the game's own, so the server needs no plugin or mod.
+
+**The server** must have `online-mode=false` in `server.properties`: a browser has no Minecraft session (and
+Mojang's 1.2.5 login servers are long gone, so live 1.2.5 servers already run this way). The game says so
+("Failed to login: the server must set online-mode=false") if it isn't. For a modded server, use the same mod
+versions and configs as the client, i.e. Full Retro's server pack.
+
+**Server owners** run the relay next to the server, and players add `wss://your.host:25566` as the server
+address in Minecraft's Multiplayer screen, like any other address:
+
+```sh
+node tools/ws-proxy.js --listen 0.0.0.0:25566 --target 127.0.0.1:25565 --cert fullchain.pem --key privkey.pem
+```
+
+The game's page is served over HTTPS, so the relay has to be reachable as `wss://` (TLS): give it a
+certificate as above, put it behind a TLS reverse proxy (Caddy, nginx), or use a tunnel such as
+`cloudflared tunnel --url http://localhost:25566`, which prints an `https://….trycloudflare.com` address that
+players enter as `wss://….trycloudflare.com`. Any other WebSocket-to-TCP bridge (e.g. websockify) works too.
+
+**Players** can also reach any 1.2.5 server themselves by running the relay on their own computer:
+
+```sh
+node tools/ws-proxy.js          # listens on ws://localhost:25566
+```
+
+Enter `ws://localhost:25566` as **Multiplayer relay** in the launcher, then add servers by their normal
+address (`play.example.com:25565`). The browser may ask for permission to connect to devices on the local
+network. This relay only listens on localhost and only answers this site's pages and pages served from
+localhost (`--origin` changes that), so other websites can't use it to reach your network.
+
+How it behaves:
+
+* Addresses starting with `ws://` or `wss://` connect straight to that relay; anything else (`host:port`)
+  goes through the launcher's relay, which connects to that server.
+* Connection problems read as on desktop: the server list shows "Can't resolve hostname" / "Can't reach
+  server", a crashed server "Connection reset", a kick its reason.
+* The game keeps running in a background tab (a small Web Worker keeps time where the browser would throttle
+  timers), so the server doesn't time the player out. Switching away opens the game menu, as on desktop.
+* Full Retro's client mods send Forge's own packets (e.g. packet 131) after logging in, which a vanilla server
+  rejects ("Bad packet id"); that happens with the desktop client too. Use a Forge server with the pack's mods.
+* Direct Connect's Enter key does nothing in 1.2.5 (a vanilla bug); click **Join Server**.
+
+Tested with the game in headless Chromium against a stand-in 1.2.5 server built from the client's own packet
+classes (Mojang's server jar isn't available in the test environment): server list ping (MOTD, player count),
+login, terrain, chat, two players seeing each other and joining/leaving, breaking blocks, kicks, a server
+going down, an online-mode server, a missing or stopped relay, direct `ws://` addresses, and 75 seconds in a
+hidden tab. A real Forge server with the full mod set has not been tried yet.
 
 ## Status
 
@@ -103,4 +155,4 @@ with WorldEdit (`/give`, `//pos1`, `//wand`), and saving a world, reloading the 
 | `web/` | Page, launcher, Web Audio OpenAL (`js/al.js`) |
 | `modpack/` | Full Retro mods and configs |
 | `input/` | Your `minecraft.jar` and resources (git-ignored) |
-| `tools/` | WebSocket → TCP proxy for multiplayer |
+| `tools/` | `ws-proxy.js`: WebSocket → TCP relay for multiplayer |

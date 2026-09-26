@@ -42,10 +42,10 @@ classes that Forge does not touch (FontRenderer, GuiContainer, EntityPlayerSP).
 
 ## Multiplayer version, and configured-but-absent mods
 
-This is the mod set of Full Retro's **multiplayer** version, so a Full Retro server can be joined later (through
-the WebSocket proxy). The shared config folder also covers mods that only the singleplayer edition ships
-(Thaumcraft 2, MineFactory Reloaded, Factorization, LaserMod, ArmorStatusHUD, StatusEffectHUD, Hidden Doors);
-they are deliberately not included, and their configs are simply unused.
+This is the mod set of Full Retro's **multiplayer** version, so a Full Retro server can be joined (through the
+WebSocket relay, see [Multiplayer](../README.md#multiplayer)). The shared config folder also covers mods that only
+the singleplayer edition ships (Thaumcraft 2, MineFactory Reloaded, Factorization, LaserMod, ArmorStatusHUD,
+StatusEffectHUD, Hidden Doors); they are deliberately not included, and their configs are simply unused.
 
 To add a mod, put its 1.2.5 client jar/zip in `mods/` (or a jar mod in `jarmods/`) and rebuild; for multiplayer the
 server needs the matching server version. Extra jar mods
