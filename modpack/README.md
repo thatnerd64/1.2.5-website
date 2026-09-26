@@ -40,10 +40,13 @@ Jar mods in `jarmods/`, layered over `minecraft.jar` in name order at build time
 **FontFixer**, **NotEnoughItems 1.2.2.4** and **Single Player Commands 3.2.2**. They replace only vanilla
 classes that Forge does not touch (FontRenderer, GuiContainer, EntityPlayerSP).
 
-## Configured but not included
+## Multiplayer version, and configured-but-absent mods
 
-The pack's configs also mention Thaumcraft 2, Factorization, LaserMod, MineFactory Reloaded, ArmorStatusHUD,
-StatusEffectHUD and Hidden Doors; their jars are not part of the pack's `mods/` folder.
+This is the mod set of Full Retro's **multiplayer** version, so a Full Retro server can be joined later (through
+the WebSocket proxy). The shared config folder also covers mods that only the singleplayer edition ships
+(Thaumcraft 2, MineFactory Reloaded, Factorization, LaserMod, ArmorStatusHUD, StatusEffectHUD, Hidden Doors);
+they are deliberately not included, and their configs are simply unused.
 
-To add a mod, put its 1.2.5 client jar/zip in `mods/` (or a jar mod in `jarmods/`) and rebuild. Extra jar mods
+To add a mod, put its 1.2.5 client jar/zip in `mods/` (or a jar mod in `jarmods/`) and rebuild; for multiplayer the
+server needs the matching server version. Extra jar mods
 of your own can also go in `input/jarmods/`, applied after these.
