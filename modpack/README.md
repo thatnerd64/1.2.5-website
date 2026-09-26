@@ -16,7 +16,7 @@ Configs edited in game are saved in the browser and take precedence over these f
 
 ## Mods included
 
-47 FML/ModLoader mods load, plus these add-ons and jar mods.
+46 FML/ModLoader mods load, plus these add-ons and jar mods.
 
 | Group | Files (in `mods/` unless noted) |
 |-------|------------------|
@@ -26,7 +26,7 @@ Configs edited in game are saved in the browser and take precedence over these f
 | RedPower 2 (pr5b2) | `RedPower{Core,Control,Lighting,Logic,Machine,Wiring,World}-*` |
 | Railcraft 5.3.3 | `Railcraft_Client_*` |
 | Forestry 1.4.8 (+ IC2 crops) | `forestry-client-A-*`, `forestry-client-B-IC2Crops_*` |
-| Equivalent Exchange 2, Mystcraft | `EE2ClientV*`, `mystcraft-client-*` |
+| Equivalent Exchange 2 | `EE2ClientV*` |
 | ChickenBones: ChickenChunks, EnderStorage, Wireless Redstone (CBE) | `ChickenChunks-*`, `EnderStorage-*`, `WR-CBE *` |
 | NEI plugins | `NEIPatch.zip`, `NEI_{Buildcraft,Forestry,RailCraft,RedPower}Plugin*` |
 | Immibis: Core, Tube Stuff, Dimensional Anchors | `immibis-core_*`, `tubestuff_*`, `zdimensional-anchor_*` |

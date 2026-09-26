@@ -70,7 +70,7 @@ cd dist && python3 -m http.server 8080      # then open http://localhost:8080
 
 ## Status
 
-Tested in headless Chromium (software WebGL) with all 47 FML mods of the pack loaded, plus its jar mods: the
+Tested in headless Chromium (software WebGL) with all 46 FML mods of the pack loaded, plus its jar mods: the
 title screen, world creation, terrain generation and rendering, movement, mouse look, mining, inventory, menus,
 the F3 debug screen, NotEnoughItems (item panel, cheat mode, plugins for BuildCraft, Forestry, Railcraft,
 RedPower, EE2 and Wireless Redstone), Inventory Tweaks, Rei's Minimap, Block Helper, Single Player Commands
