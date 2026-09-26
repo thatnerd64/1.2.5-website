@@ -117,7 +117,7 @@ tasks.register('compileWeb', JavaExec) {
     classpath = files(project(':teavm-plugin').tasks.named('jar')) +
             project(':buildtools').sourceSets.main.runtimeClasspath + configurations.teavmClasslib
     mainClass = 'retro.build.Compile'
-    maxHeapSize = (findProperty('teavmHeap') ?: '12g')
+    maxHeapSize = (findProperty('teavmHeap') ?: '11g')
     inputs.files(gameJar)
     inputs.property('devBuild', devBuild)
     inputs.files(project(':teavm-plugin').tasks.named('jar'))

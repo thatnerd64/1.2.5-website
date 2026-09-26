@@ -434,10 +434,24 @@ public final class Prepare {
                             named |= hierarchy.isSubclass(owner, e.getKey());
                         }
                     }
+                    String entry = e.getKey().replace('/', '.') + " " + name;
                     if (!name.startsWith("<") && (named || serialHook)) {
-                        reflectMethods.add(e.getKey().replace('/', '.') + " " + name);
+                        reflectMethods.add(entry);
+                        return null;
                     }
-                    return null;
+                    // Methods with runtime-visible annotations are found reflectively (WorldEdit's @Command).
+                    return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                        boolean added;
+
+                        @Override
+                        public org.objectweb.asm.AnnotationVisitor visitAnnotation(String adesc, boolean visible) {
+                            if (visible && !added && !name.startsWith("<")) {
+                                added = true;
+                                reflectMethods.add(entry);
+                            }
+                            return null;
+                        }
+                    };
                 }
             }, org.objectweb.asm.ClassReader.SKIP_CODE);
         }
