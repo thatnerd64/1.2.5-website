@@ -4,17 +4,17 @@ invertYMouse:false
 mouseSensitivity:0.36619717
 fov:1.0
 gamma:1.0
-viewDistance:0
+viewDistance:2
 guiScale:3
-particles:0
+particles:1
 bobView:true
 anaglyph3d:false
-advancedOpengl:true
+advancedOpengl:false
 fpsLimit:0
 difficulty:2
-fancyGraphics:true
-ao:true
-clouds:true
+fancyGraphics:false
+ao:false
+clouds:false
 skin:Modern Textures 1.0.1.zip
 lastServer:
 lang:en_US

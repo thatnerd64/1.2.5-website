@@ -39,6 +39,8 @@
   .ghost:hover { color: var(--text); border-color: #5a5a64; }
   .ghost.danger:hover { color: var(--danger); border-color: var(--danger); }
   .note { font-size: 12px; color: var(--muted); margin-top: 16px; line-height: 1.5; }
+  .note a { color: var(--accent); }
+  .note code { font-size: 11px; }
   .bar { height: 8px; background: #111114; border-radius: 4px; overflow: hidden; margin-top: 14px; border: 1px solid var(--border); }
   .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
   #status { font-size: 15px; margin-top: 4px; }
@@ -66,15 +68,18 @@
       <option value="1.5">150%</option>
       <option value="2">200% (sharpest)</option>
     </select>
-    <label for="proxy">Multiplayer proxy (optional)</label>
-    <input id="proxy" type="text" placeholder="wss://your-proxy.example" autocomplete="off" spellcheck="false">
+    <label for="proxy">Multiplayer relay (optional)</label>
+    <input id="proxy" type="text" placeholder="ws://localhost:25566" autocomplete="off" spellcheck="false">
     <button id="play" class="play">Play</button>
     <div class="row">
       <button id="export" class="ghost">Export saves</button>
       <button id="reset" class="ghost danger">Delete all saves</button>
     </div>
     <p class="note">
-      Multiplayer needs a WebSocket-to-TCP proxy (see tools/ws-proxy.js); singleplayer needs nothing.
+      Multiplayer: servers that run a relay are added in the game by their <code>wss://</code> address. Any other
+      1.2.5 server (<code>host:port</code>) is reached through a relay you run, such as
+      <a href="https://github.com/thatnerd64/1.2.5-website#multiplayer" target="_blank" rel="noopener">tools/ws-proxy.js</a>,
+      entered above. Servers need <code>online-mode=false</code>.
       Worlds and settings are stored in this browser. Click the game to capture the mouse; press Esc to release it.
       F11 toggles full screen. Not an official Minecraft product; not approved by or associated with Mojang or Microsoft.
     </p>

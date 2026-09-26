@@ -1,10 +1,12 @@
 package retro.compat;
 
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
@@ -50,6 +52,18 @@ public final class IoCompat {
 
     /** URL.getContent(): for the stream-backed URLs mods use, the JDK returns an InputStream. */
     public static Object urlGetContent(URL url) throws IOException {
+        return urlOpenStream(url);
+    }
+
+    /**
+     * URL.openStream(). Joining an online-mode server makes the client ask Mojang's long-retired session server
+     * ({@code joinserver.jsp}); a browser has no Minecraft session either way, so the answer is a clear reason,
+     * which the game shows as "Failed to login: ...".
+     */
+    public static InputStream urlOpenStream(URL url) throws IOException {
+        if ("session.minecraft.net".equalsIgnoreCase(url.getHost()) && url.getPath().endsWith("/joinserver.jsp")) {
+            return new ByteArrayInputStream("the server must set online-mode=false\n".getBytes(StandardCharsets.UTF_8));
+        }
         return url.openStream();
     }
 

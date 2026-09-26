@@ -133,6 +133,8 @@ final class Patches {
         virtual(CLASS, false, "newInstance", "()Ljava/lang/Object;", REFLECT, "classNewInstance");
         virtual("java/net/URL", false, "getContent", "()Ljava/lang/Object;", "retro/compat/IoCompat",
                 "urlGetContent");
+        virtual("java/net/URL", false, "openStream", "()Ljava/io/InputStream;", "retro/compat/IoCompat",
+                "urlOpenStream");
         statik(LOADER, "getSystemResources", "(Ljava/lang/String;)Ljava/util/Enumeration;", sys, "getSystemResources");
 
         // java.lang.reflect.Field primitive accessors (TeaVM only has get/set)
@@ -145,6 +147,31 @@ final class Patches {
             virtual(FIELD, false, "set" + p[0], "(Ljava/lang/Object;" + p[1] + ")V", REFLECT, "set" + p[0]);
         }
     }
+
+    /**
+     * Redirects that apply inside one class only (Minecraft 1.2.5 client names):
+     * <ul>
+     *   <li>GuiMultiplayer (acp) splits server addresses on ':'; {@code wss://} URLs stay whole
+     *       (retro.net.ServerAddress);</li>
+     *   <li>the network reader and writer threads (rl, rm) poll with {@code sleep(2)}; retro.rt.Wakeup keeps that
+     *       pace in a hidden tab, where browsers throttle timers and the server would drop the client.</li>
+     * </ul>
+     */
+    static final java.util.Map<String, List<Redirect>> SCOPED_REDIRECTS = java.util.Map.of(
+            "acp", List.of(new Redirect("java/lang/String", false, "split", "(Ljava/lang/String;)[Ljava/lang/String;",
+                    false, "retro/net/ServerAddress", "split")),
+            "rl", List.of(new Redirect("rl", false, "sleep", "(J)V", true, "retro/rt/Wakeup", "sleep")),
+            "rm", List.of(new Redirect("rm", false, "sleep", "(J)V", true, "retro/rt/Wakeup", "sleep")));
+
+    /** A method argument replaced on entry by {@code helper(argument)}: {@code slot} is its local variable. */
+    record ArgFilter(int slot, String helper, String helperName, String helperDesc) {
+    }
+
+    static final java.util.Map<String, ArgFilter> ARG_FILTERS = java.util.Map.of(
+            // Packet2Handshake(user, host, port) sends "user;host:port", which servers cut off at 64 characters:
+            // a wss:// URL host goes in as its host name
+            "jf.<init>(Ljava/lang/String;Ljava/lang/String;I)V", new ArgFilter(2, "retro/net/ServerAddress",
+                    "handshakeHost", "(Ljava/lang/String;)Ljava/lang/String;"));
 
     private static void virtual(String owner, boolean subclasses, String name, String desc, String target,
             String targetName) {
@@ -211,9 +238,32 @@ final class Patches {
                     return null;
                 }
                 MethodVisitor mv = super.visitMethod(access, name, desc, sig, exc);
+                ArgFilter filter = ARG_FILTERS.get(className + "." + name + desc);
+                List<Redirect> scoped = SCOPED_REDIRECTS.getOrDefault(className, List.of());
                 return new MethodVisitor(Opcodes.ASM9, mv) {
                     @Override
+                    public void visitCode() {
+                        super.visitCode();
+                        if (filter != null) {
+                            super.visitVarInsn(Opcodes.ALOAD, filter.slot());
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, filter.helper(), filter.helperName(),
+                                    filter.helperDesc(), false);
+                            super.visitVarInsn(Opcodes.ASTORE, filter.slot());
+                            changed[0] = true;
+                        }
+                    }
+
+                    @Override
                     public void visitMethodInsn(int op, String owner, String mname, String mdesc, boolean itf) {
+                        for (Redirect r : scoped) {
+                            if (r.owner.equals(owner) && r.name.equals(mname) && r.desc.equals(mdesc)
+                                    && r.isStatic == (op == Opcodes.INVOKESTATIC)) {
+                                String newDesc = r.isStatic ? mdesc : "(L" + r.owner + ";" + mdesc.substring(1);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, r.target, r.targetName, newDesc, false);
+                                changed[0] = true;
+                                return;
+                            }
+                        }
                         if (op == Opcodes.INVOKESPECIAL && mname.equals("<init>")) {
                             for (CtorAdapter a : CTOR_ADAPTERS) {
                                 if (a.owner.equals(owner) && a.desc.equals(mdesc)) {
