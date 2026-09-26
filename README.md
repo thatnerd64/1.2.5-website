@@ -74,6 +74,18 @@ Forge with Full Retro's server mods). Browsers can't open TCP connections, so a 
 [`tools/ws-proxy.js`](tools/ws-proxy.js), carries the game's connection over a WebSocket. It needs Node.js 16+
 and nothing else. The packets themselves are the game's own, so the server needs no plugin or mod.
 
+**Quick setup:** [`tools/setup-proxy.sh`](tools/setup-proxy.sh) asks whether you're a player or a server owner,
+sets up TLS for server owners (your certificate, a free Cloudflare tunnel, or your own reverse proxy), starts the
+relay and prints the address to use. It downloads `ws-proxy.js` if it isn't next to it, so it also works on its
+own (Linux, macOS, or Git Bash/WSL on Windows):
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/thatnerd64/1.2.5-website/main/tools/setup-proxy.sh
+bash setup-proxy.sh            # or: bash setup-proxy.sh --player / --server --tunnel
+```
+
+The details, for doing it by hand:
+
 **The server** must have `online-mode=false` in `server.properties`: a browser has no Minecraft session (and
 Mojang's 1.2.5 login servers are long gone, so live 1.2.5 servers already run this way). The game says so
 ("Failed to login: the server must set online-mode=false") if it isn't. For a modded server, use the same mod
