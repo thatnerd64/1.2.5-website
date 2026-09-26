@@ -351,8 +351,8 @@ public final class Prepare {
         }
 
         // Methods that may be looked up by name through reflection: those named by some string constant, and
-        // custom serialization hooks (called by our ObjectOutputStream/ObjectInputStream). Short names (up to 3
-        // characters, i.e. obfuscated ones such as "a") are so common as strings (recipe patterns, etc.) that they
+        // custom serialization hooks (called by our ObjectOutputStream/ObjectInputStream). One- and two-letter
+        // names (obfuscated ones such as "a") are so common as strings (recipe patterns, etc.) that they
         // would make most of the game reflectable; those count only near code that looks methods up, and only
         // for the classes that code refers to (and, for inherited methods, their superclasses).
         Set<String> lookupStrings = new java.util.HashSet<>();
@@ -376,7 +376,7 @@ public final class Prepare {
                     return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
                         @Override
                         public void visitLdcInsn(Object value) {
-                            if (value instanceof String str && str.length() <= 3) {
+                            if (value instanceof String str && str.length() <= 2) {
                                 shortStrings.add(str);
                             }
                         }
@@ -426,7 +426,7 @@ public final class Prepare {
                     boolean serialHook = (name.equals("writeObject") && desc.equals("(Ljava/io/ObjectOutputStream;)V"))
                             || (name.equals("readObject") && desc.equals("(Ljava/io/ObjectInputStream;)V"));
                     boolean named;
-                    if (name.length() > 3) {
+                    if (name.length() > 2) {
                         named = strings.contains(name);
                     } else {
                         named = lookupStrings.contains(name);
