@@ -128,9 +128,11 @@ the F3 debug screen, NotEnoughItems (item panel, cheat mode, plugins for BuildCr
 RedPower, EE2 and Wireless Redstone), Inventory Tweaks, Rei's Minimap, Block Helper, Single Player Commands
 with WorldEdit (`/give`, `//pos1`, `//wand`), and saving a world, reloading the page and continuing it.
 
-* **Performance** depends heavily on the machine. The pack's own settings (Far render distance, Fancy, smooth
-  lighting) are kept. On the CPU-only test machine the optimized build runs at about 5–10 FPS in a fresh world; a
-  desktop browser with a real GPU does considerably better. Lower the render distance for more speed.
+* **Performance** depends heavily on the machine. New players start with browser-friendly video settings
+  (Short render distance, Fast graphics, no smooth lighting or clouds, fewer particles); raise them in Options
+  if your machine keeps up. The GL emulation merges the many tiny draws of text, HUD icons and mob models into a
+  few (about 350 draw calls a frame down to about 120 in a test world). On the CPU-only test machine (software
+  WebGL) a fresh world runs at about 11 FPS; a desktop browser with a real GPU does considerably better.
 * **Networked extras don't work in a browser**: update checks, Mojang skin lookups (LumySkinPatch) and
   CraftPresence's Discord status fail quietly (CORS / no local IPC).
 * Keys and clicks: a press is always seen by the game for at least a frame, so quick taps register even in
