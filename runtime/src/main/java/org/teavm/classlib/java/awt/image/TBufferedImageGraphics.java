@@ -205,7 +205,7 @@ final class TBufferedImageGraphics extends TGraphics2D {
                 || hints.get(TRenderingHints.KEY_INTERPOLATION) == TRenderingHints.VALUE_INTERPOLATION_BICUBIC;
         int srcW = src.getWidth();
         int srcH = src.getHeight();
-        int[] sp = src.pixels;
+        int[] sp = src.argbPixels();
         boolean srcAlpha = src.hasAlpha();
         int adw = Math.abs(dw);
         int adh = Math.abs(dh);
@@ -271,5 +271,7 @@ final class TBufferedImageGraphics extends TGraphics2D {
 
     @Override
     public void dispose() {
+        // Byte-raster images: publish what was drawn to the raster's bytes.
+        target.pushBytes();
     }
 }

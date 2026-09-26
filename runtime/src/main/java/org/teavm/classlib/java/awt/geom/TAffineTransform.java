@@ -63,4 +63,61 @@ public class TAffineTransform {
     public double getTranslateY() {
         return m12;
     }
+
+    public void rotate(double theta, double anchorX, double anchorY) {
+        translate(anchorX, anchorY);
+        rotate(theta);
+        translate(-anchorX, -anchorY);
+    }
+
+    public static TAffineTransform getRotateInstance(double theta) {
+        TAffineTransform t = new TAffineTransform();
+        t.rotate(theta);
+        return t;
+    }
+
+    public static TAffineTransform getRotateInstance(double theta, double anchorX, double anchorY) {
+        TAffineTransform t = new TAffineTransform();
+        t.rotate(theta, anchorX, anchorY);
+        return t;
+    }
+
+    public void setToIdentity() {
+        m00 = 1;
+        m10 = 0;
+        m01 = 0;
+        m11 = 1;
+        m02 = 0;
+        m12 = 0;
+    }
+
+    public void setToRotation(double theta) {
+        setToIdentity();
+        rotate(theta);
+    }
+
+    public void setToTranslation(double tx, double ty) {
+        setToIdentity();
+        translate(tx, ty);
+    }
+
+    public TPoint2D transform(TPoint2D src, TPoint2D dst) {
+        if (dst == null) {
+            dst = src instanceof TPoint2D.Float ? new TPoint2D.Float() : new TPoint2D.Double();
+        }
+        double x = src.getX();
+        double y = src.getY();
+        dst.setLocation(m00 * x + m01 * y + m02, m10 * x + m11 * y + m12);
+        return dst;
+    }
+
+    public TPoint2D deltaTransform(TPoint2D src, TPoint2D dst) {
+        if (dst == null) {
+            dst = new TPoint2D.Double();
+        }
+        double x = src.getX();
+        double y = src.getY();
+        dst.setLocation(m00 * x + m01 * y, m10 * x + m11 * y);
+        return dst;
+    }
 }

@@ -14,6 +14,7 @@ public final class Input {
             + "if (window.__retroInput) return;"
             + "var canvas = document.getElementById('game');"
             + "var S = window.__retroInput = { keys: new Uint8Array(256), keyQueue: [], mouseQueue: [],"
+            + "  frame: 0, keyDownFrame: new Float64Array(256).fill(-9), buttonDownFrame: new Float64Array(8).fill(-9),"
             + "  buttons: [0,0,0,0,0,0,0,0], pending: [0,0,0,0,0,0,0,0], x: 0, y: 0, dx: 0, dy: 0, wheel: 0,"
             + "  grabbed: false, repeat: false,"
             + "  focus: true };"
@@ -47,7 +48,7 @@ public final class Input {
             + "  var k = map[e.code] || 0;"
             + "  if (!allowDefault(e)) e.preventDefault();"
             + "  if (e.repeat && !S.repeat) return;"
-            + "  S.keys[k] = 1;"
+            + "  S.keys[k] = 1; S.keyDownFrame[k] = S.frame;"
             + "  S.keyQueue.push([k, charOf(e), 1, e.repeat ? 1 : 0]);"
             + "  if (S.keyQueue.length > 256) S.keyQueue.shift();"
             + "});"
@@ -76,6 +77,7 @@ public final class Input {
             + "  if (window.__retroAudioResume) window.__retroAudioResume();"
             + "  if (S.grabbed && document.pointerLockElement !== canvas) { S.requestLock(); }"
             + "  pos(e); var b = btn(e.button); S.buttons[b] = 1; S.pending[b]++;"
+            + "  S.buttonDownFrame[b] = S.frame;"
             + "  S.mouseQueue.push([b, 1, S.x, S.y, 0, 0, 0]);"
             + "});"
             + "window.addEventListener('mouseup', function(e) {"
@@ -133,8 +135,17 @@ public final class Input {
             + "return (e[0] & 255) | ((e[1] & 65535) << 8) | (e[2] << 24) | (e[3] << 25);")
     public static native int nextKey();
 
-    @JSBody(params = "key", script = "return window.__retroInput.keys[key] === 1;")
+    /**
+     * A key (or button) pressed during frame N also reads as down until frame N+1 ends: mods such as Single
+     * Player Commands poll key state once per game tick, and a quick tap would otherwise fall between ticks.
+     */
+    @JSBody(params = "key", script = "var S = window.__retroInput;"
+            + " return S.keys[key] === 1 || S.frame - S.keyDownFrame[key] <= 1;")
     public static native boolean isKeyDown(int key);
+
+    /** Called by Display.update at the end of each frame. */
+    @JSBody(script = "if (window.__retroInput) window.__retroInput.frame++;")
+    public static native void endFrame();
 
     @JSBody(params = "on", script = "window.__retroInput.repeat = on;")
     public static native void setRepeat(boolean on);
@@ -173,7 +184,8 @@ public final class Input {
      * A button also counts as down until the game has read its press event: GUI code such as GuiSlot discards
      * queued events while no button is down, which would lose quick clicks (press and release within one frame).
      */
-    @JSBody(params = "b", script = "var S = window.__retroInput; return S.buttons[b] === 1 || S.pending[b] > 0;")
+    @JSBody(params = "b", script = "var S = window.__retroInput; return S.buttons[b] === 1 || S.pending[b] > 0"
+            + " || S.frame - S.buttonDownFrame[b] <= 1;")
     public static native boolean isButtonDown(int b);
 
     @JSBody(params = "on", script = ""

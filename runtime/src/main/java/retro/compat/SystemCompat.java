@@ -243,4 +243,14 @@ public final class SystemCompat {
     public static Enumeration<java.net.URL> getSystemResources(String name) {
         return retro.rt.Resources.loaderGetResources(null, name);
     }
+
+    /** Package.getImplementationVersion: jar manifests are not kept, so the version is unknown (null). */
+    public static String packageImplementationVersion(Package p) {
+        return null;
+    }
+
+    /** Package.getSpecificationVersion: see above. */
+    public static String packageSpecificationVersion(Package p) {
+        return null;
+    }
 }

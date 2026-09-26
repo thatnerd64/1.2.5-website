@@ -40,7 +40,7 @@ modpack/config/*      │   bytecode             ├─ gameglue/  FML class-loa
 
 ## Building
 
-Requirements: JDK 17+ (21 recommended), about 12 GB of free RAM for the TeaVM step, and your own jar.
+Requirements: JDK 17+ (21 recommended), about 14 GB of free RAM for the TeaVM step (`-PteavmHeap=11g` sets its heap), and your own jar.
 
 ```sh
 cp /path/to/.minecraft/bin/minecraft.jar input/minecraft.jar     # Forge-patched 1.2.5 client
@@ -70,15 +70,19 @@ cd dist && python3 -m http.server 8080      # then open http://localhost:8080
 
 ## Status
 
-Tested in headless Chromium (software WebGL): the title screen, world creation, terrain generation and
-rendering, movement, mouse look, mining, inventory, menus, the F3 debug screen, and saving a world, reloading
-the page and continuing it all work, with all 21 FML mods loaded.
+Tested in headless Chromium (software WebGL) with all 46 FML mods of the pack loaded, plus its jar mods: the
+title screen, world creation, terrain generation and rendering, movement, mouse look, mining, inventory, menus,
+the F3 debug screen, NotEnoughItems (item panel, cheat mode, plugins for BuildCraft, Forestry, Railcraft,
+RedPower, EE2 and Wireless Redstone), Inventory Tweaks, Rei's Minimap, Block Helper, Single Player Commands
+with WorldEdit (`/give`, `//pos1`, `//wand`), and saving a world, reloading the page and continuing it.
 
 * **Performance** depends heavily on the machine. The pack's own settings (Far render distance, Fancy, smooth
-  lighting) are kept. On the CPU-only test machine the optimized build runs at 6–8 FPS in a fresh world; a
+  lighting) are kept. On the CPU-only test machine the optimized build runs at about 5–10 FPS in a fresh world; a
   desktop browser with a real GPU does considerably better. Lower the render distance for more speed.
 * **Networked extras don't work in a browser**: update checks, Mojang skin lookups (LumySkinPatch) and
   CraftPresence's Discord status fail quietly (CORS / no local IPC).
+* Keys and clicks: a press is always seen by the game for at least a frame, so quick taps register even in
+  mods that poll key state once per tick.
 * Mods that probe for optional integrations behave as on a desktop JVM: the build rejects classes the JVM
   bytecode verifier would reject (e.g. IC2's NEI support when NEI is absent).
 * `java.util.Random` is JDK-exact, so a seed generates the same world as desktop Minecraft 1.2.5.

@@ -3,7 +3,7 @@ package org.teavm.classlib.java.awt.image;
 public class TColorModel {
     private final boolean alpha;
 
-    TColorModel(boolean alpha) {
+    protected TColorModel(boolean alpha) {
         this.alpha = alpha;
     }
 

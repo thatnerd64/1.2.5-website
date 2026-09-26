@@ -94,4 +94,22 @@ public final class ReflectCompat {
     public static void setChar(Field f, Object o, char v) throws IllegalAccessException {
         f.set(o, f.getType() == char.class ? (Object) v : convert(f, v));
     }
+
+    /** Constructor.newInstance: an abstract class cannot be instantiated (TeaVM has no constructor to call). */
+    public static Object constructorNewInstance(java.lang.reflect.Constructor<?> ctor, Object[] args)
+            throws InstantiationException, IllegalAccessException, java.lang.reflect.InvocationTargetException {
+        if (java.lang.reflect.Modifier.isAbstract(ctor.getDeclaringClass().getModifiers())) {
+            throw new InstantiationException(ctor.getDeclaringClass().getName());
+        }
+        return ctor.newInstance(args);
+    }
+
+    /** Class.newInstance, with the same check. */
+    @SuppressWarnings("deprecation")
+    public static Object classNewInstance(Class<?> cls) throws InstantiationException, IllegalAccessException {
+        if (java.lang.reflect.Modifier.isAbstract(cls.getModifiers()) || cls.isInterface()) {
+            throw new InstantiationException(cls.getName());
+        }
+        return cls.newInstance();
+    }
 }

@@ -32,11 +32,24 @@ public final class Origins {
         return origins;
     }
 
+    /** The (virtual) jar or folder a class was loaded from, or null for classes the game doesn't contain. */
+    static File jarFile(String className) {
+        String origin = load().get(className);
+        if (origin == null) {
+            return null;
+        }
+        if (origin.isEmpty()) {
+            return new File(retro.Runtime.minecraftDir(), "bin/minecraft.jar");
+        }
+        // Libraries are recorded with their bin/ path; mods by their file name in mods/.
+        return new File(retro.Runtime.minecraftDir(), origin.startsWith("bin/") ? origin : "mods/" + origin);
+    }
+
     public static URL jarUrl(Class<?> cls) {
-        String origin = load().get(cls.getName());
-        File file = origin == null
-                ? new File(retro.Runtime.minecraftDir(), "bin/minecraft.jar")
-                : new File(retro.Runtime.minecraftDir(), "mods/" + origin);
+        File file = jarFile(cls.getName());
+        if (file == null) {
+            file = new File(retro.Runtime.minecraftDir(), "bin/minecraft.jar");
+        }
         try {
             return new URL("file", "", -1, file.getAbsolutePath() + (file.isDirectory() ? "/" : ""));
         } catch (MalformedURLException e) {

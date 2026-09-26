@@ -102,6 +102,7 @@ public final class Display {
         if (created) {
             GLEmu.present();
         }
+        retro.input.Input.endFrame();
         nextFrame();
         if (created) {
             updateSize();
