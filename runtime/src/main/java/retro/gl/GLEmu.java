@@ -176,6 +176,20 @@ public final class GLEmu {
     private static int quadIndexCapacity;
     private static Shaders.Program currentProgram;
     private static int streamEnabledMask;
+    private static JSObject boundVao;
+
+    // ---- Small-draw batching ----
+    // Most of a frame's draw calls are tiny: a quad per text character, heart, slot or icon. Draws of up to
+    // BATCH_MAX_DRAW vertices are transformed by the modelview matrix on the CPU and appended to one batch,
+    // drawn with an identity modelview when anything that affects rendering is about to change: every state
+    // setter flushes first (only when its value really changes), as does every draw that is not batched.
+    private static final int BATCH_MAX_DRAW = 64;
+    private static final int BATCH_FLOATS = 14; // x y z, r g b a, nx ny nz, s0 t0, s1 t1 (as immediate mode)
+    private static final int BATCH_CAPACITY = 6144; // vertices
+    private static final float[] IDENTITY = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+    private static int batchVerts;
+    private static JSObject batchVbo;
+    private static JSObject batchState;
 
     // ---- Display lists ----
     static final class DrawOp {
@@ -184,6 +198,8 @@ public final class GLEmu {
         int mode;
         int count;
         int attribMask;
+        /** For small draws: a CPU copy of the vertex data (one Src per attribute, null if unused). */
+        Src[] cpu;
     }
 
     static final class DisplayList {
@@ -193,6 +209,9 @@ public final class GLEmu {
             for (Object op : ops) {
                 if (op instanceof DrawOp) {
                     DrawOp d = (DrawOp) op;
+                    if (JSUtil.same(boundVao, d.vao)) {
+                        boundVao = null;
+                    }
                     gl.deleteVertexArray(d.vao);
                     for (JSObject vbo : d.vbos) {
                         gl.deleteBuffer(vbo);
@@ -251,10 +270,12 @@ public final class GLEmu {
         lightDir[0][2] = 1;
         lightDir[1][2] = 1;
         streamVao = gl.createVertexArray();
-        gl.bindVertexArray(streamVao);
+        bindVao(streamVao);
         for (int i = 0; i < streamVbo.length; i++) {
             streamVbo[i] = gl.createBuffer();
         }
+        batchVbo = gl.createBuffer();
+        batchState = createBatchState(BATCH_CAPACITY * BATCH_FLOATS);
         quadIndexBuffer = gl.createBuffer();
         gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIndexBuffer);
         ensureQuadIndices(65536);
@@ -290,6 +311,13 @@ public final class GLEmu {
         quadIndexCapacity = capacity;
     }
 
+    private static void bindVao(JSObject vao) {
+        if (boundVao == null || !JSUtil.same(boundVao, vao)) {
+            gl.bindVertexArray(vao);
+            boundVao = vao;
+        }
+    }
+
     private static boolean record(Runnable op) {
         if (compiling == null) {
             return false;
@@ -310,6 +338,13 @@ public final class GLEmu {
                 return textureMatrix[activeUnit][texTop[activeUnit]];
             default:
                 return modelview[mvTop];
+        }
+    }
+
+    /** Before the current matrix changes: batched vertices carry the modelview, but no other matrix. */
+    private static void matrixChanging() {
+        if (matrixMode != GL_MODELVIEW) {
+            flushBatch();
         }
     }
 
@@ -383,6 +418,7 @@ public final class GLEmu {
     }
 
     private static void popMatrixImpl() {
+        matrixChanging();
         switch (matrixMode) {
             case GL_PROJECTION:
                 if (projTop > 0) {
@@ -411,6 +447,7 @@ public final class GLEmu {
     }
 
     private static void loadIdentityImpl() {
+        matrixChanging();
         Mat4.identity(current());
         changed();
     }
@@ -423,6 +460,7 @@ public final class GLEmu {
     }
 
     private static void translateImpl(float x, float y, float z) {
+        matrixChanging();
         Mat4.translate(current(), x, y, z);
         changed();
     }
@@ -435,6 +473,7 @@ public final class GLEmu {
     }
 
     private static void scaleImpl(float x, float y, float z) {
+        matrixChanging();
         Mat4.scale(current(), x, y, z);
         changed();
     }
@@ -447,6 +486,7 @@ public final class GLEmu {
     }
 
     private static void rotateImpl(float angle, float x, float y, float z) {
+        matrixChanging();
         Mat4.rotate(current(), angle, x, y, z);
         changed();
     }
@@ -459,6 +499,7 @@ public final class GLEmu {
     }
 
     private static void orthoImpl(double l, double r, double b, double t, double n, double f) {
+        matrixChanging();
         Mat4.ortho(current(), l, r, b, t, n, f);
         changed();
     }
@@ -471,6 +512,7 @@ public final class GLEmu {
     }
 
     private static void frustumImpl(double l, double r, double b, double t, double n, double f) {
+        matrixChanging();
         Mat4.frustum(current(), l, r, b, t, n, f);
         changed();
     }
@@ -483,6 +525,7 @@ public final class GLEmu {
     }
 
     private static void perspectiveImpl(float fovy, float aspect, float near, float far) {
+        matrixChanging();
         Mat4.perspective(current(), fovy, aspect, near, far);
         changed();
     }
@@ -496,6 +539,7 @@ public final class GLEmu {
     }
 
     private static void multMatrixImpl(float[] m) {
+        matrixChanging();
         Mat4.mul(current(), m);
         changed();
     }
@@ -509,6 +553,7 @@ public final class GLEmu {
     }
 
     private static void loadMatrixImpl(float[] m) {
+        matrixChanging();
         System.arraycopy(m, 0, current(), 0, 16);
         changed();
     }
@@ -540,6 +585,10 @@ public final class GLEmu {
     }
 
     private static void setCap(int cap, boolean on) {
+        if (isEnabled(cap) == on) {
+            return;
+        }
+        flushBatch();
         switch (cap) {
             case GL_TEXTURE_2D:
                 textureEnabled[activeUnit] = on;
@@ -667,6 +716,7 @@ public final class GLEmu {
 
     private static void blendFuncImpl(int src, int dst) {
         if (src != blendSrc || dst != blendDst) {
+            flushBatch();
             blendSrc = src;
             blendDst = dst;
             gl.blendFunc(src, dst);
@@ -681,6 +731,7 @@ public final class GLEmu {
     }
 
     private static void blendFuncSeparateImpl(int srcRgb, int dstRgb, int srcAlpha, int dstAlpha) {
+        flushBatch();
         blendSrc = -1;
         blendDst = -1;
         gl.blendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
@@ -694,6 +745,10 @@ public final class GLEmu {
     }
 
     private static void alphaFuncImpl(int func, float ref) {
+        if (func == alphaFunc && ref == alphaRef) {
+            return;
+        }
+        flushBatch();
         alphaFunc = func;
         alphaRef = ref;
         alphaVersion = ++counter;
@@ -708,6 +763,7 @@ public final class GLEmu {
 
     private static void depthFuncImpl(int func) {
         if (func != depthFunc) {
+            flushBatch();
             depthFunc = func;
             gl.depthFunc(func);
         }
@@ -722,6 +778,7 @@ public final class GLEmu {
 
     private static void depthMaskImpl(boolean flag) {
         if (flag != depthMask) {
+            flushBatch();
             depthMask = flag;
             gl.depthMask(flag);
         }
@@ -735,6 +792,10 @@ public final class GLEmu {
     }
 
     private static void colorMaskImpl(boolean r, boolean g, boolean b, boolean a) {
+        if (colorMask[0] == r && colorMask[1] == g && colorMask[2] == b && colorMask[3] == a) {
+            return;
+        }
+        flushBatch();
         colorMask = new boolean[] { r, g, b, a };
         gl.colorMask(r, g, b, a);
     }
@@ -748,19 +809,26 @@ public final class GLEmu {
 
     private static void cullFaceImpl(int mode) {
         if (mode != cullFaceMode) {
+            flushBatch();
             cullFaceMode = mode;
             gl.cullFace(mode);
         }
     }
 
     public static void frontFace(int mode) {
+        flushBatch();
         gl.frontFace(mode);
     }
 
     public static void polygonOffset(float factor, float units) {
-        if (record(() -> gl.polygonOffset(factor, units))) {
+        if (record(() -> polygonOffsetImpl(factor, units))) {
             return;
         }
+        polygonOffsetImpl(factor, units);
+    }
+
+    private static void polygonOffsetImpl(float factor, float units) {
+        flushBatch();
         gl.polygonOffset(factor, units);
     }
 
@@ -772,11 +840,16 @@ public final class GLEmu {
     }
 
     private static void lineWidthImpl(float width) {
+        if (width == lineWidth) {
+            return;
+        }
+        flushBatch();
         lineWidth = width;
         gl.lineWidth(width);
     }
 
     public static void viewport(int x, int y, int w, int h) {
+        flushBatch();
         viewport[0] = x;
         viewport[1] = y;
         viewport[2] = w;
@@ -785,13 +858,19 @@ public final class GLEmu {
     }
 
     public static void scissor(int x, int y, int w, int h) {
+        flushBatch();
         gl.scissor(x, y, w, h);
     }
 
     public static void clear(int mask) {
-        if (record(() -> gl.clear(mask))) {
+        if (record(() -> clearImpl(mask))) {
             return;
         }
+        clearImpl(mask);
+    }
+
+    private static void clearImpl(int mask) {
+        flushBatch();
         gl.clear(mask);
     }
 
@@ -812,28 +891,41 @@ public final class GLEmu {
     }
 
     public static void stencilFunc(int func, int ref, int mask) {
-        if (record(() -> gl.stencilFunc(func, ref, mask))) {
+        if (record(() -> stencilFuncImpl(func, ref, mask))) {
             return;
         }
+        stencilFuncImpl(func, ref, mask);
+    }
+
+    private static void stencilFuncImpl(int func, int ref, int mask) {
+        flushBatch();
         gl.stencilFunc(func, ref, mask);
     }
 
     public static void stencilOp(int fail, int zfail, int zpass) {
-        if (record(() -> gl.stencilOp(fail, zfail, zpass))) {
+        if (record(() -> stencilOpImpl(fail, zfail, zpass))) {
             return;
         }
+        stencilOpImpl(fail, zfail, zpass);
+    }
+
+    private static void stencilOpImpl(int fail, int zfail, int zpass) {
+        flushBatch();
         gl.stencilOp(fail, zfail, zpass);
     }
 
     public static void stencilMask(int mask) {
+        flushBatch();
         gl.stencilMask(mask);
     }
 
     public static void flush() {
+        flushBatch();
         gl.flush();
     }
 
     public static void finish() {
+        flushBatch();
         gl.flush();
     }
 
@@ -969,6 +1061,7 @@ public final class GLEmu {
     }
 
     private static void fogiImpl(int pname, int value) {
+        flushBatch();
         if (pname == 0xB65) {
             fogMode = value;
             fogVersion = ++counter;
@@ -985,6 +1078,7 @@ public final class GLEmu {
     }
 
     private static void fogfImpl(int pname, float value) {
+        flushBatch();
         switch (pname) {
             case 0xB62:
                 fogDensity = value;
@@ -1013,6 +1107,7 @@ public final class GLEmu {
     }
 
     private static void fogvImpl(int pname, float[] v) {
+        flushBatch();
         if (pname == 0xB66) {
             System.arraycopy(v, 0, fogColor, 0, Math.min(4, v.length));
             fogVersion = ++counter;
@@ -1083,6 +1178,7 @@ public final class GLEmu {
 
     public static void deleteTexture(int id) {
         if (id > 0 && id < textures.size() && textures.get(id) != null) {
+            flushBatch();
             gl.deleteTexture(textures.get(id).tex);
             textures.set(id, null);
             for (int u = 0; u < 4; u++) {
@@ -1111,6 +1207,7 @@ public final class GLEmu {
 
     private static void bindTextureImpl(int id) {
         if (boundTexture[activeUnit] != id) {
+            flushBatch();
             boundTexture[activeUnit] = id;
             gl.bindTexture(GL_TEXTURE_2D, texObject(id));
         }
@@ -1147,6 +1244,7 @@ public final class GLEmu {
     }
 
     private static void texParameteriImpl(int pname, int param) {
+        flushBatch();
         switch (pname) {
             case 0x2801: // MIN_FILTER
             case 0x2800: // MAG_FILTER
@@ -1180,6 +1278,7 @@ public final class GLEmu {
         if (t == null || target != GL_TEXTURE_2D) {
             return;
         }
+        flushBatch();
         ArrayBufferView data = pixels == null ? null : convertPixels(format, type, width, height, pixels);
         gl.texImage2D(GL_TEXTURE_2D, level, 0x8058, width, height, 0, 0x1908, GL_UNSIGNED_BYTE, data);
         if (level == 0) {
@@ -1199,6 +1298,7 @@ public final class GLEmu {
         if (t == null || pixels == null || width <= 0 || height <= 0) {
             return;
         }
+        flushBatch();
         ArrayBufferView data = convertPixels(format, type, width, height, pixels);
         gl.texSubImage2D(GL_TEXTURE_2D, level, x, y, width, height, 0x1908, GL_UNSIGNED_BYTE, data);
     }
@@ -1208,6 +1308,7 @@ public final class GLEmu {
         if (t == null) {
             return;
         }
+        flushBatch();
         if (boundFramebuffer == 0 && !t.rgb && t.width > 0) {
             // The canvas has no alpha channel and WebGL cannot copy RGB into RGBA. Desktop GL fills alpha with 1
             // in that case, which is what an RGB8 texture samples as.
@@ -1241,6 +1342,7 @@ public final class GLEmu {
     public static void generateMipmap() {
         Tex t = tex(boundTexture[activeUnit]);
         if (t != null && t.width > 0) {
+            flushBatch();
             gl.texParameteri(GL_TEXTURE_2D, 0x813D, 1000);
             t.maxLevel = 1000;
             gl.generateMipmap(GL_TEXTURE_2D);
@@ -1325,6 +1427,7 @@ public final class GLEmu {
     }
 
     public static void readPixels(int x, int y, int width, int height, int format, int type, Buffer pixels) {
+        flushBatch();
         Uint8Array rgba = new Uint8Array(width * height * 4);
         gl.readPixels(x, y, width, height, 0x1908, GL_UNSIGNED_BYTE, rgba);
         Src dst = new Src();
@@ -1643,7 +1746,11 @@ public final class GLEmu {
             }
             return;
         }
-        gl.bindVertexArray(streamVao);
+        if (batchable(mode, count) && appendToBatch(mode, count, srcs, srcUsed)) {
+            return;
+        }
+        flushBatch();
+        bindVao(streamVao);
         int mask = 0;
         for (int i = 0; i < 5; i++) {
             if (srcUsed[i]) {
@@ -1707,7 +1814,7 @@ public final class GLEmu {
             }
             streamEnabledMask = mask;
         }
-        prepare(mask);
+        prepare(mask, false);
         issue(mode, count);
     }
 
@@ -1715,8 +1822,27 @@ public final class GLEmu {
         DrawOp op = new DrawOp();
         op.mode = mode;
         op.count = count;
+        if (count <= BATCH_MAX_DRAW) {
+            // small list draws (e.g. a font character) are batched when replayed: keep the data on the CPU
+            op.cpu = new Src[5];
+            for (int i = 0; i < 5; i++) {
+                if (srcUsed[i]) {
+                    Src from = srcs[i];
+                    Src c = new Src();
+                    int extent = (count - 1) * from.stride + from.size * typeSize(from.type);
+                    c.base = JSUtil.slice(from.base, from.offset,
+                            Math.max(0, Math.min(extent, from.base.getByteLength() - from.offset)));
+                    c.offset = 0;
+                    c.size = from.size;
+                    c.type = from.type;
+                    c.normalized = from.normalized;
+                    c.stride = from.stride;
+                    op.cpu[i] = c;
+                }
+            }
+        }
         op.vao = gl.createVertexArray();
-        gl.bindVertexArray(op.vao);
+        bindVao(op.vao);
         gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIndexBuffer);
         List<JSObject> vbos = new ArrayList<>();
         List<ArrayBuffer> bases = new ArrayList<>();
@@ -1765,7 +1891,7 @@ public final class GLEmu {
             gl.enableVertexAttribArray(i);
         }
         op.vbos = vbos.toArray(new JSObject[0]);
-        gl.bindVertexArray(streamVao);
+        bindVao(streamVao);
         if (mode == GL_QUADS) {
             ensureQuadIndices(count);
         }
@@ -1773,10 +1899,193 @@ public final class GLEmu {
     }
 
     private static void drawOp(DrawOp op) {
-        gl.bindVertexArray(op.vao);
-        prepare(op.attribMask);
+        if (op.cpu != null && batchable(op.mode, op.count) && appendToBatch(op.mode, op.count, op.cpu, null)) {
+            return;
+        }
+        flushBatch();
+        bindVao(op.vao);
+        prepare(op.attribMask, false);
         issue(op.mode, op.count);
     }
+
+    // ---- Small-draw batching (see BATCH_MAX_DRAW) ----
+
+    /** Whether a draw may join the batch: small, a polygon mode, unlit, no texgen, an affine modelview. */
+    private static boolean batchable(int mode, int count) {
+        if (count > BATCH_MAX_DRAW || lighting || texGenEnabled[0] || texGenEnabled[1] || texGenEnabled[2]
+                || texGenEnabled[3]) {
+            return false;
+        }
+        switch (mode) {
+            case GL_TRIANGLES:
+            case GL_TRIANGLE_STRIP:
+            case GL_TRIANGLE_FAN:
+            case GL_QUADS:
+            case GL_QUAD_STRIP:
+            case GL_POLYGON:
+                break;
+            default:
+                return false;
+        }
+        float[] m = modelview[mvTop];
+        return m[3] == 0 && m[7] == 0 && m[11] == 0 && m[15] == 1;
+    }
+
+    /**
+     * Appends a draw to the batch as triangles in eye space, with every attribute per vertex (current values
+     * where no array is enabled). {@code used} null means attributes are present where {@code s[i]} is not null.
+     * False if the vertex layout is not supported, the draw is then issued normally.
+     */
+    private static boolean appendToBatch(int mode, int count, Src[] s, boolean[] used) {
+        Src pos = batchSource(s, used, Shaders.A_POS);
+        Src tex0 = batchSource(s, used, Shaders.A_TEX0);
+        Src tex1 = batchSource(s, used, Shaders.A_TEX1);
+        if (pos == null || pos.size > 3 || tex0 != null && tex0.size > 2 || tex1 != null && tex1.size > 2) {
+            return false;
+        }
+        for (int i = 0; i < 5; i++) {
+            Src a = batchSource(s, used, i);
+            if (a != null && a.type == GL_DOUBLE) {
+                return false;
+            }
+        }
+        int triangles = mode == GL_TRIANGLES ? count / 3 : mode == GL_QUADS ? count / 4 * 2
+                : mode == GL_QUAD_STRIP ? Math.max(0, (count - 2) / 2 * 2) : Math.max(0, count - 2);
+        if (batchVerts + triangles * 3 > BATCH_CAPACITY) {
+            flushBatch();
+        }
+        for (int i = 0; i < 5; i++) {
+            Src a = batchSource(s, used, i);
+            if (a == null) {
+                setBatchAttr(batchState, i, null, 0, 0, 0, 0, false);
+            } else {
+                setBatchAttr(batchState, i, a.base, a.offset, a.stride, a.type, a.size, a.normalized);
+            }
+        }
+        float[] t0 = texCoord[0];
+        float[] t1 = texCoord[1];
+        batchVerts = appendBatch(batchState, batchVerts, mode, count, Float32Array.fromJavaArray(modelview[mvTop]),
+                color[0], color[1], color[2], color[3], normal[0], normal[1], normal[2], t0[0], t0[1], t1[0], t1[1]);
+        return true;
+    }
+
+    private static Src batchSource(Src[] s, boolean[] used, int i) {
+        return (used == null || used[i]) ? s[i] : null;
+    }
+
+    /** Draws the batched vertices, with the (unchanged since) current state and an identity modelview. */
+    static void flushBatch() {
+        if (batchVerts == 0) {
+            return;
+        }
+        int n = batchVerts;
+        batchVerts = 0;
+        bindVao(streamVao);
+        gl.bindBuffer(GL_ARRAY_BUFFER, batchVbo);
+        gl.bufferData(GL_ARRAY_BUFFER, batchData(batchState, n * BATCH_FLOATS), 0x88E0);
+        int stride = BATCH_FLOATS * 4;
+        gl.vertexAttribPointer(Shaders.A_POS, 3, GL_FLOAT, false, stride, 0);
+        gl.vertexAttribPointer(Shaders.A_COLOR, 4, GL_FLOAT, false, stride, 12);
+        gl.vertexAttribPointer(Shaders.A_NORMAL, 3, GL_FLOAT, false, stride, 28);
+        gl.vertexAttribPointer(Shaders.A_TEX0, 2, GL_FLOAT, false, stride, 40);
+        gl.vertexAttribPointer(Shaders.A_TEX1, 2, GL_FLOAT, false, stride, 48);
+        for (int i = 0; i < 5; i++) {
+            if ((streamEnabledMask & (1 << i)) == 0) {
+                gl.enableVertexAttribArray(i);
+            }
+        }
+        streamEnabledMask = 0x1F;
+        prepare(0x1F, true);
+        gl.drawArrays(GL_TRIANGLES, 0, n);
+    }
+
+    @JSBody(params = "capacity", script = ""
+            + "var attribs = [];"
+            + "for (var slot = 0; slot < 5; slot++) {"
+            + "  attribs.push({ base: null, view: null, viewBase: null, off: 0, stride: 0, type: 0, size: 0, norm: false });"
+            + "}"
+            + "return { out: new Float32Array(capacity), attribs: attribs, order: new Int32Array(512) };")
+    private static native JSObject createBatchState(int capacity);
+
+    @JSBody(params = { "S", "slot", "base", "off", "stride", "type", "size", "norm" }, script = ""
+            + "var desc = S.attribs[slot];"
+            + "desc.base = base;"
+            + "if (base && desc.viewBase !== base) { desc.view = new DataView(base); desc.viewBase = base; }"
+            + "desc.off = off; desc.stride = stride; desc.type = type; desc.size = size; desc.norm = norm;")
+    private static native void setBatchAttr(JSObject state, int slot, ArrayBuffer base, int off, int stride,
+            int type, int size, boolean norm);
+
+    @JSBody(params = { "S", "floats" }, script = "return S.out.subarray(0, floats);")
+    private static native ArrayBufferView batchData(JSObject state, int floats);
+
+    /** Appends a draw's vertices as triangles; returns the new vertex count of the batch. */
+    @JSBody(params = { "S", "start", "mode", "count", "mv", "cr", "cg", "cb", "ca", "nx", "ny", "nz",
+            "s0", "t0", "s1", "t1" }, script = ""
+            + "function read(desc, vertex, comp) {"
+            + "  var at = desc.off + vertex * desc.stride;"
+            + "  var dv = desc.view;"
+            + "  switch (desc.type) {"
+            + "    case 0x1406: return dv.getFloat32(at + comp * 4, true);"
+            + "    case 0x1401: return desc.norm ? dv.getUint8(at + comp) / 255 : dv.getUint8(at + comp);"
+            + "    case 0x1400: return desc.norm ? Math.max(dv.getInt8(at + comp) / 127, -1) : dv.getInt8(at + comp);"
+            + "    case 0x1402: return desc.norm ? Math.max(dv.getInt16(at + comp * 2, true) / 32767, -1)"
+            + "        : dv.getInt16(at + comp * 2, true);"
+            + "    case 0x1403: return desc.norm ? dv.getUint16(at + comp * 2, true) / 65535"
+            + "        : dv.getUint16(at + comp * 2, true);"
+            + "    case 0x1404: return dv.getInt32(at + comp * 4, true);"
+            + "    case 0x1405: return dv.getUint32(at + comp * 4, true);"
+            + "    default: return 0;"
+            + "  }"
+            + "}"
+            + "var order = S.order, len = 0, idx;"
+            + "if (mode === 4) {"
+            + "  for (idx = 0; idx + 2 < count; idx += 3) { order[len++] = idx; order[len++] = idx + 1; order[len++] = idx + 2; }"
+            + "} else if (mode === 7) {"
+            + "  for (idx = 0; idx + 3 < count; idx += 4) {"
+            + "    order[len++] = idx; order[len++] = idx + 1; order[len++] = idx + 2;"
+            + "    order[len++] = idx; order[len++] = idx + 2; order[len++] = idx + 3;"
+            + "  }"
+            + "} else if (mode === 5) {"
+            + "  for (idx = 0; idx + 2 < count; idx++) {"
+            + "    if (idx & 1) { order[len++] = idx + 1; order[len++] = idx; }"
+            + "    else { order[len++] = idx; order[len++] = idx + 1; }"
+            + "    order[len++] = idx + 2;"
+            + "  }"
+            + "} else if (mode === 8) {"
+            + "  for (idx = 0; idx + 3 < count; idx += 2) {"
+            + "    order[len++] = idx; order[len++] = idx + 1; order[len++] = idx + 3;"
+            + "    order[len++] = idx; order[len++] = idx + 3; order[len++] = idx + 2;"
+            + "  }"
+            + "} else {"
+            + "  for (idx = 1; idx + 1 < count; idx++) { order[len++] = 0; order[len++] = idx; order[len++] = idx + 1; }"
+            + "}"
+            + "var out = S.out, pos = S.attribs[0], col = S.attribs[1], nor = S.attribs[2];"
+            + "var tx0 = S.attribs[3], tx1 = S.attribs[4];"
+            + "for (var num = 0; num < len; num++) {"
+            + "  var vertex = order[num], dst = (start + num) * 14;"
+            + "  var px = read(pos, vertex, 0), py = pos.size > 1 ? read(pos, vertex, 1) : 0;"
+            + "  var pz = pos.size > 2 ? read(pos, vertex, 2) : 0;"
+            + "  out[dst] = mv[0] * px + mv[4] * py + mv[8] * pz + mv[12];"
+            + "  out[dst + 1] = mv[1] * px + mv[5] * py + mv[9] * pz + mv[13];"
+            + "  out[dst + 2] = mv[2] * px + mv[6] * py + mv[10] * pz + mv[14];"
+            + "  if (col.base) {"
+            + "    out[dst + 3] = read(col, vertex, 0); out[dst + 4] = read(col, vertex, 1);"
+            + "    out[dst + 5] = read(col, vertex, 2); out[dst + 6] = col.size > 3 ? read(col, vertex, 3) : 1;"
+            + "  } else { out[dst + 3] = cr; out[dst + 4] = cg; out[dst + 5] = cb; out[dst + 6] = ca; }"
+            + "  if (nor.base) {"
+            + "    out[dst + 7] = read(nor, vertex, 0); out[dst + 8] = read(nor, vertex, 1); out[dst + 9] = read(nor, vertex, 2);"
+            + "  } else { out[dst + 7] = nx; out[dst + 8] = ny; out[dst + 9] = nz; }"
+            + "  if (tx0.base) {"
+            + "    out[dst + 10] = read(tx0, vertex, 0); out[dst + 11] = tx0.size > 1 ? read(tx0, vertex, 1) : 0;"
+            + "  } else { out[dst + 10] = s0; out[dst + 11] = t0; }"
+            + "  if (tx1.base) {"
+            + "    out[dst + 12] = read(tx1, vertex, 0); out[dst + 13] = tx1.size > 1 ? read(tx1, vertex, 1) : 0;"
+            + "  } else { out[dst + 12] = s1; out[dst + 13] = t1; }"
+            + "}"
+            + "return start + len;")
+    private static native int appendBatch(JSObject state, int start, int mode, int count, Float32Array mv,
+            float cr, float cg, float cb, float ca, float nx, float ny, float nz, float s0, float t0, float s1,
+            float t1);
 
     private static void issue(int mode, int count) {
         switch (mode) {
@@ -1797,7 +2106,7 @@ public final class GLEmu {
     }
 
     /** Selects the shader variant and uploads whatever state changed since it was last used. */
-    private static void prepare(int attribMask) {
+    private static void prepare(int attribMask, boolean identityModelview) {
         int f = 0;
         Tex t0 = textureEnabled[0] ? tex(boundTexture[0]) : null;
         if (t0 != null && t0.width > 0) {
@@ -1824,7 +2133,12 @@ public final class GLEmu {
             gl.useProgram(p.program);
             currentProgram = p;
         }
-        if (p.mvVersion != mvVersion) {
+        if (identityModelview) {
+            if (p.mvVersion != -2) { // batched vertices are already in eye space
+                gl.uniformMatrix4fv(p.uMv, false, IDENTITY);
+                p.mvVersion = -2;
+            }
+        } else if (p.mvVersion != mvVersion) {
             gl.uniformMatrix4fv(p.uMv, false, modelview[mvTop]);
             p.mvVersion = mvVersion;
         }
@@ -2104,7 +2418,6 @@ public final class GLEmu {
             old.free();
         }
         displayLists.set(compilingId, done);
-        gl.bindVertexArray(streamVao);
     }
 
     public static void callList(int list) {
@@ -2136,7 +2449,6 @@ public final class GLEmu {
         } finally {
             callDepth--;
         }
-        gl.bindVertexArray(streamVao);
     }
 
     public static void deleteLists(int list, int range) {
@@ -2245,6 +2557,7 @@ public final class GLEmu {
         if (attribStack.isEmpty()) {
             return;
         }
+        flushBatch();
         Attribs a = attribStack.remove(attribStack.size() - 1);
         alphaTest = a.alphaTest;
         fog = a.fog;
@@ -2407,6 +2720,7 @@ public final class GLEmu {
     }
 
     public static void deleteFramebuffer(int id) {
+        flushBatch();
         if (id > 0 && id < framebuffers.size() && framebuffers.get(id) != null) {
             gl.deleteFramebuffer(framebuffers.get(id));
             framebuffers.set(id, null);
@@ -2414,11 +2728,13 @@ public final class GLEmu {
     }
 
     public static void bindFramebuffer(int target, int id) {
+        flushBatch();
         boundFramebuffer = id;
         gl.bindFramebuffer(0x8D40, id > 0 && id < framebuffers.size() ? framebuffers.get(id) : screenFramebuffer);
     }
 
     public static void framebufferTexture2D(int target, int attachment, int textarget, int texture, int level) {
+        flushBatch();
         gl.framebufferTexture2D(0x8D40, attachment, GL_TEXTURE_2D, texObject(texture), level);
     }
 
@@ -2440,6 +2756,7 @@ public final class GLEmu {
     }
 
     public static void renderbufferStorage(int target, int internalFormat, int width, int height) {
+        flushBatch();
         int format = internalFormat;
         switch (internalFormat) {
             case 0x1902:
@@ -2462,6 +2779,7 @@ public final class GLEmu {
     }
 
     public static void framebufferRenderbuffer(int target, int attachment, int rbTarget, int renderbuffer) {
+        flushBatch();
         gl.framebufferRenderbuffer(0x8D40, attachment, 0x8D41,
                 renderbuffer > 0 && renderbuffer < renderbuffers.size() ? renderbuffers.get(renderbuffer) : null);
     }
@@ -2476,6 +2794,7 @@ public final class GLEmu {
      * game frame can span several browser tasks (green threads yield while it is being drawn).
      */
     static void resizeScreen(int width, int height) {
+        flushBatch();
         if (screenFramebuffer == null) {
             screenFramebuffer = gl.createFramebuffer();
             screenColor = gl.createRenderbuffer();
@@ -2497,6 +2816,7 @@ public final class GLEmu {
 
     /** Copies the finished frame to the canvas; the browser presents it when the current task ends. */
     static void present() {
+        flushBatch();
         if (screenFramebuffer == null) {
             return;
         }
