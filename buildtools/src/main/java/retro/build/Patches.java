@@ -36,6 +36,13 @@ final class Patches {
     );
 
     /** Methods whose body is replaced by an empty one (owner.name+desc). */
+    /**
+     * Static {@code boolean m(File)} methods that add a jar to the running class path (via URLClassLoader.addURL
+     * reflection). Every class is linked at build time, so these just report whether the jar exists.
+     */
+    static final Set<String> CLASSPATH_ADDERS = Set.of(
+            "PlayerHelper.addToClasspath(Ljava/io/File;)Z");
+
     static final Set<String> EMPTIED = Set.of(
             // LumySkinPatch: its classes are applied at build time (RUNTIME_CLASS_PATCHES)
             "net/thecondemned/LumySkinPatch/mod_LumySkinPatch.patchClass(Ljava/lang/String;Ljava/lang/String;)V"
@@ -114,9 +121,16 @@ final class Patches {
         virtual("java/util/Properties", true, "store", "(Ljava/io/OutputStream;Ljava/lang/String;)V", sys,
                 "propertiesStoreStream");
         virtual("java/lang/Package", false, "getName", "()Ljava/lang/String;", sys, "packageName");
+        virtual("java/lang/Package", false, "getImplementationVersion", "()Ljava/lang/String;", sys,
+                "packageImplementationVersion");
+        virtual("java/lang/Package", false, "getSpecificationVersion", "()Ljava/lang/String;", sys,
+                "packageSpecificationVersion");
         virtual(CLASS, false, "getPackage", "()Ljava/lang/Package;", sys, "classGetPackage");
         virtual(CLASS, false, "isAnonymousClass", "()Z", sys, "isAnonymousClass");
         virtual(CLASS, false, "getGenericSuperclass", "()Ljava/lang/reflect/Type;", sys, "getGenericSuperclass");
+        virtual("java/lang/reflect/Constructor", false, "newInstance", "([Ljava/lang/Object;)Ljava/lang/Object;",
+                REFLECT, "constructorNewInstance");
+        virtual(CLASS, false, "newInstance", "()Ljava/lang/Object;", REFLECT, "classNewInstance");
         virtual("java/net/URL", false, "getContent", "()Ljava/lang/Object;", "retro/compat/IoCompat",
                 "urlGetContent");
         statik(LOADER, "getSystemResources", "(Ljava/lang/String;)Ljava/util/Enumeration;", sys, "getSystemResources");
@@ -162,6 +176,18 @@ final class Patches {
                         locals += t.getSize();
                     }
                     mv.visitMaxs(0, locals);
+                    mv.visitEnd();
+                    return null;
+                }
+                if (CLASSPATH_ADDERS.contains(className + "." + name + desc)
+                        && (access & Opcodes.ACC_STATIC) != 0) {
+                    changed[0] = true;
+                    MethodVisitor mv = super.visitMethod(access, name, desc, sig, exc);
+                    mv.visitCode();
+                    mv.visitVarInsn(Opcodes.ALOAD, 0);
+                    mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/File", "exists", "()Z", false);
+                    mv.visitInsn(Opcodes.IRETURN);
+                    mv.visitMaxs(1, 1);
                     mv.visitEnd();
                     return null;
                 }

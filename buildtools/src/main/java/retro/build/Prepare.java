@@ -94,6 +94,7 @@ public final class Prepare {
         // 1. The game jar, with jar mods layered on top (like the classic "delete META-INF" install): first the
         // modpack's own (modpack/jarmods), then the user's extras (input/jarmods), each in name order.
         Map<String, byte[]> gameEntries = readZip(jar);
+        Set<String> jarModClasses = new java.util.HashSet<>();
         for (Path dir : List.of(modpack.resolve("jarmods"), jarMods)) {
             if (!Files.isDirectory(dir)) {
                 continue;
@@ -101,7 +102,13 @@ public final class Prepare {
             for (Path p : sortedChildren(dir)) {
                 if (ZIP_JAR.matcher(p.getFileName().toString()).matches()) {
                     log.add("jar mod: " + p.getFileName());
-                    gameEntries.putAll(readZip(p));
+                    Map<String, byte[]> entries = readZip(p);
+                    gameEntries.putAll(entries);
+                    for (String n : entries.keySet()) {
+                        if (n.endsWith(".class")) {
+                            jarModClasses.add(n.substring(0, n.length() - 6));
+                        }
+                    }
                 }
             }
         }
@@ -115,7 +122,24 @@ public final class Prepare {
             }
         }
 
-        // 2. Mods, in the order FML scans them (File.compareTo == path string order).
+        // 2a. Libraries in .minecraft/bin besides minecraft.jar (e.g. WorldEdit.jar for Single Player Commands):
+        //     on the classpath after minecraft.jar, not scanned by FML.
+        List<ModSource> binLibraries = new ArrayList<>();
+        Path binDir = modpack.resolve("bin");
+        if (Files.isDirectory(binDir)) {
+            for (Path p : sortedChildren(binDir)) {
+                if (ZIP_JAR.matcher(p.getFileName().toString()).matches()) {
+                    ModSource lib = ModSource.fromZip(p, "bin/" + p.getFileName());
+                    binLibraries.add(lib);
+                    for (var e : lib.entries.entrySet()) {
+                        add(e.getKey(), e.getValue(), lib.name);
+                    }
+                    log.add("library: " + lib.name);
+                }
+            }
+        }
+
+        // 2b. Mods, in the order FML scans them (File.compareTo == path string order).
         Path modsDir = modpack.resolve("mods");
         List<ModSource> mods = new ArrayList<>();
         if (Files.isDirectory(modsDir)) {
@@ -305,16 +329,22 @@ public final class Prepare {
         }
 
         // As on a JVM, any class in a mod can be loaded by name (Forestry, for example, discovers its plugins by
-        // listing its own jar). Minecraft's own classes are only loadable by name when referenced as above.
+        // listing its own jar). Minecraft's own classes are only loadable by name when referenced as above (jar
+        // mods' classes are, though).
         // That includes jars FML finds no mod in: add-ons such as NEI's plugins and Forestry's IC2 crops are
         // discovered by their host mod listing the mods folder. Excluded: third-party libraries bundled in mods.
         Set<String> modSources = new java.util.HashSet<>();
         for (ModSource mod : mods) {
             modSources.add(mod.name);
         }
+        for (ModSource lib : binLibraries) {
+            modSources.add(lib.name);
+        }
         for (var e : classOrigin.entrySet()) {
             String name = e.getKey();
-            if (modSources.contains(e.getValue()) && classes.containsKey(name) && !name.contains("package-info")
+            // Jar mods' own classes count as mod classes (NEI finds its configuration classes by scanning).
+            boolean fromMod = modSources.contains(e.getValue()) || jarModClasses.contains(name);
+            if (fromMod && classes.containsKey(name) && !name.contains("package-info")
                     && !isBundledLibrary(name)) {
                 byName.add(name.replace('/', '.'));
             }
@@ -323,106 +353,68 @@ public final class Prepare {
         // Methods that may be looked up by name through reflection: those named by some string constant, and
         // custom serialization hooks (called by our ObjectOutputStream/ObjectInputStream). Short names (up to 3
         // characters, i.e. obfuscated ones such as "a") are so common as strings (recipe patterns, etc.) that they
-        // would make most of the game reflectable; those count only in a method that itself looks methods up.
-        // Where the target class is a class literal (X.class.getDeclaredMethod("a", ...)), the name is tied to X
-        // (and its superclasses); otherwise it applies to every class.
+        // would make most of the game reflectable; those count only near code that looks methods up, and only
+        // for the classes that code refers to (and, for inherited methods, their superclasses).
         Set<String> lookupStrings = new java.util.HashSet<>();
         Map<String, Set<String>> lookupOwners = new HashMap<>();
-        for (byte[] bytes : classes.values()) {
+        // Scope: a named package (mods keep obfuscated names in constant classes next to their reflection
+        // helper, e.g. Mouse Tweaks), or the class itself in the default package (Minecraft, ModLoader mods).
+        Map<String, Set<String>> scopeStrings = new HashMap<>();
+        Map<String, Set<String>> scopeTargets = new HashMap<>();
+        for (var entry : classes.entrySet()) {
+            byte[] bytes = entry.getValue();
+            String cname = entry.getKey();
+            int slash = cname.lastIndexOf('/');
+            String scope = slash < 0 ? cname : cname.substring(0, slash);
+            Set<String> shortStrings = scopeStrings.computeIfAbsent(scope, k -> new java.util.HashSet<>());
+            boolean[] looksUp = {false};
             new org.objectweb.asm.ClassReader(bytes).accept(new org.objectweb.asm.ClassVisitor(
                     org.objectweb.asm.Opcodes.ASM9) {
                 @Override
                 public org.objectweb.asm.MethodVisitor visitMethod(int access, String name, String desc,
                         String sig, String[] exc) {
                     return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
-                        final Set<String> own = new java.util.HashSet<>();
-                        boolean enumerates;
-                        int index;
-                        int classLiteralAt = -2;
-                        String classLiteral;
-                        String pendingName;
-                        String pendingOwner;
-
-                        private void step() {
-                            index++;
-                        }
-
                         @Override
                         public void visitLdcInsn(Object value) {
-                            if (value instanceof org.objectweb.asm.Type
-                                    && ((org.objectweb.asm.Type) value).getSort() == org.objectweb.asm.Type.OBJECT) {
-                                classLiteral = ((org.objectweb.asm.Type) value).getInternalName();
-                                classLiteralAt = index;
-                            } else if (value instanceof String && ((String) value).length() <= 3) {
-                                own.add((String) value);
-                                // The name string counts as a pending lookup until the next getMethod call.
-                                pendingName = (String) value;
-                                pendingOwner = classLiteralAt == index - 1 ? classLiteral : null;
+                            if (value instanceof String str && str.length() <= 3) {
+                                shortStrings.add(str);
                             }
-                            step();
                         }
 
                         @Override
                         public void visitMethodInsn(int op, String owner, String mname, String mdesc,
                                 boolean itf) {
-                            if (owner.equals("java/lang/Class")) {
-                                if (mname.equals("getMethod") || mname.equals("getDeclaredMethod")) {
-                                    if (pendingName != null) {
-                                        if (pendingOwner != null) {
-                                            lookupOwners.computeIfAbsent(pendingName, k -> new java.util.HashSet<>())
-                                                    .add(pendingOwner);
-                                        } else {
-                                            lookupStrings.add(pendingName);
-                                        }
-                                        pendingName = null;
-                                    }
-                                } else if (mname.equals("getMethods") || mname.equals("getDeclaredMethods")) {
-                                    enumerates = true;
-                                }
-                            }
-                            step();
-                        }
-
-                        @Override
-                        public void visitInsn(int opcode) {
-                            step();
-                        }
-
-                        @Override
-                        public void visitIntInsn(int opcode, int operand) {
-                            step();
-                        }
-
-                        @Override
-                        public void visitVarInsn(int opcode, int var) {
-                            step();
-                        }
-
-                        @Override
-                        public void visitTypeInsn(int opcode, String type) {
-                            step();
-                        }
-
-                        @Override
-                        public void visitFieldInsn(int opcode, String owner, String fname, String fdesc) {
-                            step();
-                        }
-
-                        @Override
-                        public void visitJumpInsn(int opcode, org.objectweb.asm.Label label) {
-                            step();
-                        }
-
-                        @Override
-                        public void visitEnd() {
-                            if (enumerates) {
-                                // Names compared against getMethods() results: tied to no particular class.
-                                lookupStrings.addAll(own);
+                            if (owner.equals("java/lang/Class") && (mname.equals("getMethod")
+                                    || mname.equals("getDeclaredMethod") || mname.equals("getMethods")
+                                    || mname.equals("getDeclaredMethods"))) {
+                                looksUp[0] = true;
                             }
                         }
                     };
                 }
             }, org.objectweb.asm.ClassReader.SKIP_DEBUG | org.objectweb.asm.ClassReader.SKIP_FRAMES);
+            if (!looksUp[0]) {
+                continue;
+            }
+            // The classes a lookup class refers to (constant-pool class entries): a reflective lookup by a
+            // short name targets one of them, or a subclass whose method is declared in one of them.
+            Set<String> targets = scopeTargets.computeIfAbsent(scope, k -> new java.util.HashSet<>());
+            org.objectweb.asm.ClassReader cr = new org.objectweb.asm.ClassReader(bytes);
+            char[] buf = new char[cr.getMaxStringLength()];
+            for (int i = 1; i < cr.getItemCount(); i++) {
+                int offset = cr.getItem(i);
+                if (offset != 0 && cr.readByte(offset - 1) == 7) {
+                    String cls = cr.readUTF8(offset, buf);
+                    if (cls != null && !cls.startsWith("[") && classes.containsKey(cls)) {
+                        targets.add(cls);
+                    }
+                }
+            }
+        }
+        for (var e : scopeTargets.entrySet()) {
+            for (String str : scopeStrings.getOrDefault(e.getKey(), Set.of())) {
+                lookupOwners.computeIfAbsent(str, k -> new java.util.HashSet<>()).addAll(e.getValue());
+            }
         }
         List<String> reflectMethods = new ArrayList<>();
         for (var e : classes.entrySet()) {
@@ -479,12 +471,15 @@ public final class Prepare {
         }
         resources.put("retro/generic-supers.txt", generics.toString().getBytes(StandardCharsets.UTF_8));
 
-        // Which jar each mod class came from (for mods that look up their own code source).
+        // Which jar each class came from (for mods that look up their own code source, or list their own jar
+        // through getResource("X.class")). Classes from minecraft.jar and jar mods have an empty origin.
         StringBuilder origins = new StringBuilder();
         for (var e : classOrigin.entrySet()) {
-            if (!e.getValue().equals("minecraft.jar")) {
-                origins.append(e.getKey().replace('/', '.')).append('\t').append(e.getValue()).append('\n');
+            if (e.getValue().equals("(stub)") || !patched.containsKey(e.getKey())) {
+                continue;
             }
+            String origin = e.getValue().equals("minecraft.jar") ? "" : e.getValue();
+            origins.append(e.getKey().replace('/', '.')).append('\t').append(origin).append('\n');
         }
         resources.put("retro/origins.txt", origins.toString().getBytes(StandardCharsets.UTF_8));
 
@@ -499,6 +494,9 @@ public final class Prepare {
         FsImage fs = new FsImage();
         fs.addModpack(modpack);
         fs.addStubJar("bin/minecraft.jar", gameEntries);
+        for (ModSource lib : binLibraries) {
+            fs.addStubJar(lib.name, lib.entries);
+        }
         for (ModSource mod : mods) {
             fs.addMod(mod);
         }
@@ -615,7 +613,11 @@ public final class Prepare {
         }
 
         static ModSource fromZip(Path p) throws IOException {
-            ModSource m = new ModSource(p.getFileName().toString(), false);
+            return fromZip(p, p.getFileName().toString());
+        }
+
+        static ModSource fromZip(Path p, String name) throws IOException {
+            ModSource m = new ModSource(name, false);
             m.entries.putAll(readZip(p));
             m.detectSelfReading();
             for (String n : m.entries.keySet()) {

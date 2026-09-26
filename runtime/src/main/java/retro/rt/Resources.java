@@ -129,12 +129,42 @@ public final class Resources {
     static URL url(String path) {
         path = strip(path);
         if (!exists(path)) {
-            return null;
+            return path.endsWith(".class") ? classUrl(path) : null;
         }
         try {
             return new URL("res", "", -1, "/" + path, ResourceHandler.INSTANCE);
         } catch (MalformedURLException e) {
             return null;
+        }
+    }
+
+    /**
+     * A class file's URL, as a JVM gives it: {@code jar:file:/.../bin/minecraft.jar!/X.class} (or the mod's jar,
+     * or {@code file:} inside a mod folder). The jar is the virtual one listing the game's entries, so mods can
+     * enumerate it (Single Player Commands finds its plugins this way). The class bytes themselves are not
+     * available.
+     */
+    private static URL classUrl(String path) {
+        java.io.File jar = Origins.jarFile(path.substring(0, path.length() - 6).replace('/', '.'));
+        if (jar == null) {
+            return null;
+        }
+        try {
+            if (jar.isDirectory()) {
+                return new URL("file", "", -1, new java.io.File(jar, path).getAbsolutePath(), ClassFileHandler.INSTANCE);
+            }
+            return new URL("jar", "", -1, "file:" + jar.getAbsolutePath() + "!/" + path, ClassFileHandler.INSTANCE);
+        } catch (MalformedURLException e) {
+            return null;
+        }
+    }
+
+    static final class ClassFileHandler extends java.net.URLStreamHandler {
+        static final ClassFileHandler INSTANCE = new ClassFileHandler();
+
+        @Override
+        protected java.net.URLConnection openConnection(URL u) throws IOException {
+            throw new IOException("Class files are not available at run time: " + u);
         }
     }
 

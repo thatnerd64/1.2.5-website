@@ -21,7 +21,7 @@ import java.util.zip.ZipOutputStream;
  * (class entries are empty; resources keep their data for mods that read their own jar).
  */
 final class FsImage {
-    private static final Set<String> SKIPPED_MODPACK_ENTRIES = Set.of("mods", "resources", "README-mods.md");
+    private static final Set<String> SKIPPED_MODPACK_ENTRIES = Set.of("mods", "jarmods", "bin", "resources", "README.md", "README-mods.md");
 
     private final Map<String, byte[]> files = new LinkedHashMap<>();
 

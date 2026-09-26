@@ -5,6 +5,7 @@ Everything in this folder becomes the game's `.minecraft` directory in the brows
 | Path | Becomes |
 |------|---------|
 | `mods/` | `.minecraft/mods/` (jars, zips and class folders, loaded by FML exactly as on desktop) |
+| `bin/` | `.minecraft/bin/`: extra classpath jars next to `minecraft.jar` (WorldEdit for SPC) |
 | `jarmods/` | classes layered over `minecraft.jar` at build time (NEI, CodeChickenCore, SPC, FontFixer) |
 | `config/` | `.minecraft/config/`, the pack's mod configuration (block/item IDs etc.) |
 | `buildcraft/`, `redpower/`, `profileImage/`, `mod_EE.props` | per-mod files in `.minecraft/` |
@@ -17,7 +18,7 @@ Configs edited in game are saved in the browser and take precedence over these f
 
 47 FML/ModLoader mods load, plus these add-ons and jar mods.
 
-| Group | Files in `mods/` |
+| Group | Files (in `mods/` unless noted) |
 |-------|------------------|
 | Minecraft Forge 3.4.9 + FML 2.2 | inside your `minecraft.jar` |
 | BuildCraft 3.1.6, Additional Pipes, Logistics Pipes | `buildcraft-client-*`, `additionalpipes-*`, `LogisticsPipes-*` |
@@ -32,7 +33,7 @@ Configs edited in game are saved in the browser and take precedence over these f
 | MFFS, Iron Chests, Shelf, Portal Gun | `mffs_*`, `mod_ironchests-*`, `shelf-*`, `portalgun/` |
 | Inventory Tweaks, KeySprint, Mouse Tweaks, Block Helper | `InvTweaks-*`, `KeySprint.zip`, `MouseTweaks-*`, `BlockHelper-*` |
 | Rei's Minimap | `[1.2.5]ReiMinimap_*` (settings in `rei_minimap/`) |
-| WorldEdit (used by Single Player Commands) | `WorldEdit.jar` (settings in `sppcommands/`) |
+| WorldEdit (used by Single Player Commands) | `../bin/WorldEdit.jar` (settings in `sppcommands/`) |
 | LumySkinPatch (applied at build time), CraftPresence (inert in a browser) | `LumySkinPatch-*`, `CraftPresence-*` |
 
 Jar mods in `jarmods/`, layered over `minecraft.jar` in name order at build time: **CodeChickenCore 0.5.5**,

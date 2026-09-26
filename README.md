@@ -40,7 +40,7 @@ modpack/config/*      │   bytecode             ├─ gameglue/  FML class-loa
 
 ## Building
 
-Requirements: JDK 17+ (21 recommended), about 12 GB of free RAM for the TeaVM step, and your own jar.
+Requirements: JDK 17+ (21 recommended), about 14 GB of free RAM for the TeaVM step (`-PteavmHeap=12g` sets its heap), and your own jar.
 
 ```sh
 cp /path/to/.minecraft/bin/minecraft.jar input/minecraft.jar     # Forge-patched 1.2.5 client
