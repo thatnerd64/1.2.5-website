@@ -82,6 +82,11 @@ public final class GLEmu {
         int maxLevel;
         /** True once re-specified as RGB8 to receive copies from the (alpha-less) default framebuffer. */
         boolean rgb;
+        /** Filter and wrap parameters last set (0: not yet), so repeated identical calls cost nothing. */
+        int minFilter;
+        int magFilter;
+        int wrapS;
+        int wrapT;
     }
 
     private static final List<Tex> textures = new ArrayList<>();
@@ -1009,6 +1014,7 @@ public final class GLEmu {
     }
 
     private static void lightImpl(int light, int pname, float[] v) {
+        flushBatch();
         int i = light - 0x4000;
         if (i < 0 || i >= 8) {
             return;
@@ -1047,6 +1053,7 @@ public final class GLEmu {
     }
 
     private static void lightModelImpl(int pname, float[] v) {
+        flushBatch();
         if (pname == 0xB53) {
             System.arraycopy(v, 0, lightModelAmbient, 0, 4);
             lightVersion = ++counter;
@@ -1172,6 +1179,10 @@ public final class GLEmu {
         gl.bindTexture(GL_TEXTURE_2D, t.tex);
         gl.texParameteri(GL_TEXTURE_2D, 0x813D, 0);
         gl.texParameteri(GL_TEXTURE_2D, 0x2801, 0x2601);
+        t.minFilter = 0x2601; // as just set; the rest are WebGL's defaults
+        t.magFilter = 0x2601;
+        t.wrapS = 0x2901;
+        t.wrapT = 0x2901;
         gl.bindTexture(GL_TEXTURE_2D, texObject(boundTexture[activeUnit]));
         return id;
     }
@@ -1244,16 +1255,39 @@ public final class GLEmu {
     }
 
     private static void texParameteriImpl(int pname, int param) {
-        flushBatch();
+        Tex bound = tex(boundTexture[activeUnit]);
         switch (pname) {
             case 0x2801: // MIN_FILTER
             case 0x2800: // MAG_FILTER
-                gl.texParameteri(GL_TEXTURE_2D, pname, param);
-                break;
             case 0x2802: // WRAP_S
-            case 0x2803: // WRAP_T
-                gl.texParameteri(GL_TEXTURE_2D, pname, param == 0x2900 || param == 0x812D ? 0x812F : param);
+            case 0x2803: { // WRAP_T
+                int value = pname >= 0x2802 && (param == 0x2900 || param == 0x812D) ? 0x812F : param;
+                if (bound != null) {
+                    // EntityRenderer sets the lightmap's filters and wrapping every time it enables it
+                    int last = pname == 0x2801 ? bound.minFilter : pname == 0x2800 ? bound.magFilter
+                            : pname == 0x2802 ? bound.wrapS : bound.wrapT;
+                    if (last == value) {
+                        return;
+                    }
+                    if (pname == 0x2801) {
+                        bound.minFilter = value;
+                    } else if (pname == 0x2800) {
+                        bound.magFilter = value;
+                    } else if (pname == 0x2802) {
+                        bound.wrapS = value;
+                    } else {
+                        bound.wrapT = value;
+                    }
+                }
+                flushBatch();
+                gl.texParameteri(GL_TEXTURE_2D, pname, value);
+                return;
+            }
+            default:
                 break;
+        }
+        flushBatch();
+        switch (pname) {
             case 0x813D: { // MAX_LEVEL
                 Tex t = tex(boundTexture[activeUnit]);
                 if (t != null) {
@@ -1910,9 +1944,9 @@ public final class GLEmu {
 
     // ---- Small-draw batching (see BATCH_MAX_DRAW) ----
 
-    /** Whether a draw may join the batch: small, a polygon mode, unlit, no texgen, an affine modelview. */
+    /** Whether a draw may join the batch: small, a polygon mode, no texgen, an affine modelview. */
     private static boolean batchable(int mode, int count) {
-        if (count > BATCH_MAX_DRAW || lighting || texGenEnabled[0] || texGenEnabled[1] || texGenEnabled[2]
+        if (count > BATCH_MAX_DRAW || texGenEnabled[0] || texGenEnabled[1] || texGenEnabled[2]
                 || texGenEnabled[3]) {
             return false;
         }
@@ -1932,8 +1966,8 @@ public final class GLEmu {
     }
 
     /**
-     * Appends a draw to the batch as triangles in eye space, with every attribute per vertex (current values
-     * where no array is enabled). {@code used} null means attributes are present where {@code s[i]} is not null.
+     * Appends a draw to the batch as triangles in eye space (positions and normals; the shader normalizes the
+     * latter), with every attribute per vertex (current values where no array is enabled). {@code used} null means attributes are present where {@code s[i]} is not null.
      * False if the vertex layout is not supported, the draw is then issued normally.
      */
     private static boolean appendToBatch(int mode, int count, Src[] s, boolean[] used) {
@@ -2072,9 +2106,11 @@ public final class GLEmu {
             + "    out[dst + 3] = read(col, vertex, 0); out[dst + 4] = read(col, vertex, 1);"
             + "    out[dst + 5] = read(col, vertex, 2); out[dst + 6] = col.size > 3 ? read(col, vertex, 3) : 1;"
             + "  } else { out[dst + 3] = cr; out[dst + 4] = cg; out[dst + 5] = cb; out[dst + 6] = ca; }"
-            + "  if (nor.base) {"
-            + "    out[dst + 7] = read(nor, vertex, 0); out[dst + 8] = read(nor, vertex, 1); out[dst + 9] = read(nor, vertex, 2);"
-            + "  } else { out[dst + 7] = nx; out[dst + 8] = ny; out[dst + 9] = nz; }"
+            + "  var qx = nx, qy = ny, qz = nz;"
+            + "  if (nor.base) { qx = read(nor, vertex, 0); qy = read(nor, vertex, 1); qz = read(nor, vertex, 2); }"
+            + "  out[dst + 7] = mv[0] * qx + mv[4] * qy + mv[8] * qz;"
+            + "  out[dst + 8] = mv[1] * qx + mv[5] * qy + mv[9] * qz;"
+            + "  out[dst + 9] = mv[2] * qx + mv[6] * qy + mv[10] * qz;"
             + "  if (tx0.base) {"
             + "    out[dst + 10] = read(tx0, vertex, 0); out[dst + 11] = tx0.size > 1 ? read(tx0, vertex, 1) : 0;"
             + "  } else { out[dst + 10] = s0; out[dst + 11] = t0; }"
