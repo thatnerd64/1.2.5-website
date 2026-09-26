@@ -113,11 +113,15 @@ public final class Display {
     private static native void nextFrame();
 
     private static void nextFrame(AsyncCallback<Void> callback) {
-        requestFrame(() -> callback.complete(null));
+        if (isHidden()) {
+            // no animation frames in a hidden tab; keep ticking (multiplayer servers drop silent clients)
+            retro.rt.Wakeup.schedule(50, () -> callback.complete(null));
+        } else {
+            requestFrame(() -> callback.complete(null));
+        }
     }
 
-    @JSBody(params = "cb", script = ""
-            + "if (document.hidden) setTimeout(cb, 50); else requestAnimationFrame(function() { cb(); });")
+    @JSBody(params = "cb", script = "requestAnimationFrame(function() { cb(); });")
     private static native void requestFrame(FrameCallback cb);
 
     public static boolean isActive() {

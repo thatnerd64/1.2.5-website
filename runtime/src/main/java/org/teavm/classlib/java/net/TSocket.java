@@ -6,8 +6,10 @@ import java.io.OutputStream;
 import retro.net.WebSocketConnection;
 
 /**
- * TCP sockets tunnelled over a WebSocket proxy (configured by the page as {@code retroConfig.proxy}). Minecraft
- * multiplayer and server list pings use this.
+ * TCP sockets carried over WebSockets (see {@link WebSocketConnection}): through the launcher's relay for
+ * {@code host:port}, or straight to a {@code ws://} / {@code wss://} URL given as the host. Minecraft
+ * multiplayer and server list pings use this. Connection errors, read timeouts and closes raise the same
+ * exceptions as on a JVM.
  */
 public class TSocket implements java.io.Closeable {
     private WebSocketConnection connection;
@@ -31,37 +33,58 @@ public class TSocket implements java.io.Closeable {
     }
 
     public void connect(TSocketAddress endpoint, int timeout) throws IOException {
+        if (closed) {
+            throw new TSocketException("Socket is closed");
+        }
+        if (connection != null) {
+            throw new TSocketException("already connected");
+        }
         if (!(endpoint instanceof TInetSocketAddress)) {
             throw new IllegalArgumentException("Unsupported address type");
         }
+        if (timeout < 0) {
+            throw new IllegalArgumentException("connect: timeout can't be negative");
+        }
         remote = (TInetSocketAddress) endpoint;
-        try {
-            connection = WebSocketConnection.open(remote.getHostName(), remote.getPort(), timeout);
-        } catch (IOException e) {
-            throw new TConnectException(e.getMessage());
+        connection = WebSocketConnection.open(remote.getHostString(), remote.getPort(), timeout);
+        connection.setReadTimeout(soTimeout);
+        if (closed) {
+            connection.close();
         }
     }
 
     public InputStream getInputStream() throws IOException {
-        if (connection == null) {
-            throw new TSocketException("Socket is not connected");
-        }
-        return connection.inputStream(this);
+        checkOpen();
+        return connection.inputStream();
     }
 
     public OutputStream getOutputStream() throws IOException {
+        checkOpen();
+        return connection.outputStream();
+    }
+
+    private void checkOpen() throws IOException {
+        if (closed) {
+            throw new TSocketException("Socket is closed");
+        }
         if (connection == null) {
             throw new TSocketException("Socket is not connected");
         }
-        return connection.outputStream();
     }
 
     public int getSoTimeout() {
         return soTimeout;
     }
 
+    /** Read timeout in milliseconds (0: none); a read that waits longer throws SocketTimeoutException. */
     public void setSoTimeout(int timeout) {
+        if (timeout < 0) {
+            throw new IllegalArgumentException("timeout can't be negative");
+        }
         soTimeout = timeout;
+        if (connection != null) {
+            connection.setReadTimeout(timeout);
+        }
     }
 
     public void setTcpNoDelay(boolean on) {
@@ -74,16 +97,36 @@ public class TSocket implements java.io.Closeable {
     public void setTrafficClass(int tc) {
     }
 
+    public int getTrafficClass() {
+        return 0;
+    }
+
     public void setKeepAlive(boolean on) {
+    }
+
+    public boolean getKeepAlive() {
+        return false;
     }
 
     public void setReceiveBufferSize(int size) {
     }
 
+    public int getReceiveBufferSize() {
+        return 65536;
+    }
+
     public void setSendBufferSize(int size) {
     }
 
+    public int getSendBufferSize() {
+        return 65536;
+    }
+
     public void setSoLinger(boolean on, int linger) {
+    }
+
+    public int getSoLinger() {
+        return -1;
     }
 
     public void setReuseAddress(boolean on) {
@@ -136,7 +179,7 @@ public class TSocket implements java.io.Closeable {
     }
 
     public int getLocalPort() {
-        return 0;
+        return connection == null ? -1 : 0;
     }
 
     @Override
@@ -145,5 +188,10 @@ public class TSocket implements java.io.Closeable {
         if (connection != null) {
             connection.close();
         }
+    }
+
+    @Override
+    public String toString() {
+        return remote == null ? "Socket[unconnected]" : "Socket[addr=" + remote + "]";
     }
 }
