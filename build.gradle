@@ -120,6 +120,7 @@ tasks.register('compileWeb', JavaExec) {
     maxHeapSize = (findProperty('teavmHeap') ?: '11g')
     inputs.files(gameJar)
     inputs.property('devBuild', devBuild)
+    inputs.property('teavmOpt', (findProperty('teavmOpt') ?: ''))
     inputs.files(project(':teavm-plugin').tasks.named('jar'))
     inputs.files(project(':runtime').tasks.named('jar'), project(':gameglue').tasks.named('jar'))
     outputs.dir(teavmOut)
@@ -134,6 +135,7 @@ tasks.register('compileWeb', JavaExec) {
         args '--out', teavmOut.get().asFile,
              '--classpath', cp.join(File.pathSeparator),
              '--dev', devBuild,
+             '--opt', (findProperty('teavmOpt') ?: ''),
              '--cache', layout.buildDirectory.dir('teavm-cache').get().asFile
     }
 }

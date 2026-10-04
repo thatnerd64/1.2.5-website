@@ -182,6 +182,13 @@ final class Patches {
     private static final String REGION_FILE = "lz";
     private static final int REGION_FILE_DEFLATE_LEVEL = 1;
 
+    /**
+     * NextTickListEntry (ml) hashes to {@code x << 28 + z << 18 + y << 8 + blockId}, which TeaVM's HashMap (no bit
+     * mixing) buckets by block id and height alone. During terrain generation the scheduled-tick set then spends
+     * ~40% of the frame walking one chain per fluid height; see {@code retro.compat.Hashes}.
+     */
+    private static final String NEXT_TICK_ENTRY = "ml";
+
     private static void virtual(String owner, boolean subclasses, String name, String desc, String target,
             String targetName) {
         REDIRECTS.add(new Redirect(owner, subclasses, name, desc, false, target, targetName));
@@ -199,9 +206,24 @@ final class Patches {
         ClassReader reader = new ClassReader(bytes);
         ClassWriter writer = new ClassWriter(reader, 0);
         boolean[] changed = {false};
+        boolean nextTickEntry = className.equals(NEXT_TICK_ENTRY) && isNextTickListEntry(bytes);
         ClassVisitor cv = new ClassVisitor(Opcodes.ASM9, writer) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] exc) {
+                if (nextTickEntry && name.equals("hashCode") && desc.equals("()I")) {
+                    changed[0] = true;
+                    MethodVisitor mv = super.visitMethod(access, name, desc, sig, exc);
+                    mv.visitCode();
+                    for (String field : new String[] {"a", "b", "c", "d"}) {
+                        mv.visitVarInsn(Opcodes.ALOAD, 0);
+                        mv.visitFieldInsn(Opcodes.GETFIELD, className, field, "I");
+                    }
+                    mv.visitMethodInsn(Opcodes.INVOKESTATIC, "retro/compat/Hashes", "mix4", "(IIII)I", false);
+                    mv.visitInsn(Opcodes.IRETURN);
+                    mv.visitMaxs(4, 1);
+                    mv.visitEnd();
+                    return null;
+                }
                 if (EMPTIED.contains(className + "." + name + desc) && desc.endsWith(")V")) {
                     changed[0] = true;
                     MethodVisitor mv = super.visitMethod(access, name, desc, sig, exc);
@@ -332,6 +354,26 @@ final class Patches {
         };
         reader.accept(cv, 0);
         return changed[0] ? writer.toByteArray() : bytes;
+    }
+
+    /** True when {@code bytes} has NextTickListEntry's shape: int x/y/z/id fields a-d, long time fields e and g. */
+    private static boolean isNextTickListEntry(byte[] bytes) {
+        org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
+        int ints = 0;
+        int longs = 0;
+        for (org.objectweb.asm.tree.FieldNode f : node.fields) {
+            if ((f.access & Opcodes.ACC_STATIC) != 0) {
+                continue;
+            }
+            if (f.desc.equals("I") && List.of("a", "b", "c", "d").contains(f.name)) {
+                ints++;
+            } else if (f.desc.equals("J") && List.of("e", "g").contains(f.name)) {
+                longs++;
+            }
+        }
+        boolean hashCode = node.methods.stream().anyMatch(m -> m.name.equals("hashCode") && m.desc.equals("()I"));
+        return ints == 4 && longs == 2 && hashCode && node.interfaces.contains("java/lang/Comparable");
     }
 
     private static Redirect find(int op, String owner, String name, String desc, Hierarchy hierarchy) {

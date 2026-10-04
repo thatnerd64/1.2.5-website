@@ -36,7 +36,9 @@ public final class Compile {
         tool.setTargetFileName("classes.js");
         tool.setClassPath(classPath);
         tool.setObfuscated(!dev);
-        tool.setOptimizationLevel(dev ? TeaVMOptimizationLevel.SIMPLE : TeaVMOptimizationLevel.ADVANCED);
+        String level = opts.getOrDefault("opt", "");
+        tool.setOptimizationLevel(!level.isBlank() ? TeaVMOptimizationLevel.valueOf(level.toUpperCase())
+                : dev ? TeaVMOptimizationLevel.SIMPLE : TeaVMOptimizationLevel.ADVANCED);
         tool.setDebugInformationGenerated(false);
         tool.setSourceMapsFileGenerated(dev);
         if (!dev) {
