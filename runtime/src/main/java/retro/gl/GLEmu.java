@@ -177,6 +177,11 @@ public final class GLEmu {
     // ---- Draw resources ----
     private static JSObject streamVao;
     private static final JSObject[] streamVbo = new JSObject[5];
+    // scratch for submit(), kept here so a streamed draw allocates nothing
+    private static final ArrayBuffer[] streamGroupBase = new ArrayBuffer[5];
+    private static final int[] streamGroupMin = new int[5];
+    private static final int[] streamGroupMax = new int[5];
+    private static final int[] streamAttribGroup = new int[5];
     private static JSObject quadIndexBuffer;
     private static int quadIndexCapacity;
     private static Shaders.Program currentProgram;
@@ -1793,10 +1798,10 @@ public final class GLEmu {
         }
         // Group attributes by the JS buffer they live in; usually everything is one interleaved buffer.
         int groups = 0;
-        ArrayBuffer[] groupBase = new ArrayBuffer[5];
-        int[] groupMin = new int[5];
-        int[] groupMax = new int[5];
-        int[] attribGroup = new int[5];
+        ArrayBuffer[] groupBase = streamGroupBase;
+        int[] groupMin = streamGroupMin;
+        int[] groupMax = streamGroupMax;
+        int[] attribGroup = streamAttribGroup;
         for (int i = 0; i < 5; i++) {
             if (!srcUsed[i]) {
                 continue;
