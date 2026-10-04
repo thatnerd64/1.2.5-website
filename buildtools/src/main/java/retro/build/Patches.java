@@ -173,6 +173,15 @@ final class Patches {
             "jf.<init>(Ljava/lang/String;Ljava/lang/String;I)V", new ArgFilter(2, "retro/net/ServerAddress",
                     "handshakeHost", "(Ljava/lang/String;)Ljava/lang/String;"));
 
+    /**
+     * RegionFile (lz) compresses every saved chunk with {@code new DeflaterOutputStream(out)}, i.e. zlib level 6.
+     * Chunks are written on the game thread (no worker threads here), so a save was a visible stall, and deflate
+     * was the largest single cost of a settled world's profile. Level 1 is several times faster for a
+     * slightly larger file; the reader inflates both alike.
+     */
+    private static final String REGION_FILE = "lz";
+    private static final int REGION_FILE_DEFLATE_LEVEL = 1;
+
     private static void virtual(String owner, boolean subclasses, String name, String desc, String target,
             String targetName) {
         REDIRECTS.add(new Redirect(owner, subclasses, name, desc, false, target, targetName));
@@ -240,7 +249,13 @@ final class Patches {
                 MethodVisitor mv = super.visitMethod(access, name, desc, sig, exc);
                 ArgFilter filter = ARG_FILTERS.get(className + "." + name + desc);
                 List<Redirect> scoped = SCOPED_REDIRECTS.getOrDefault(className, List.of());
+                int[] extraStack = {0};
                 return new MethodVisitor(Opcodes.ASM9, mv) {
+                    @Override
+                    public void visitMaxs(int maxStack, int maxLocals) {
+                        super.visitMaxs(maxStack + extraStack[0], maxLocals);
+                    }
+
                     @Override
                     public void visitCode() {
                         super.visitCode();
@@ -263,6 +278,21 @@ final class Patches {
                                 changed[0] = true;
                                 return;
                             }
+                        }
+                        if (op == Opcodes.INVOKESPECIAL && className.equals(REGION_FILE)
+                                && owner.equals("java/util/zip/DeflaterOutputStream")
+                                && mname.equals("<init>") && mdesc.equals("(Ljava/io/OutputStream;)V")) {
+                            // stack: ... stream -> ... stream, new Deflater(level)
+                            super.visitTypeInsn(Opcodes.NEW, "java/util/zip/Deflater");
+                            super.visitInsn(Opcodes.DUP);
+                            super.visitIntInsn(Opcodes.BIPUSH, REGION_FILE_DEFLATE_LEVEL);
+                            super.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/util/zip/Deflater", "<init>", "(I)V",
+                                    false);
+                            super.visitMethodInsn(op, owner, mname, "(Ljava/io/OutputStream;Ljava/util/zip/Deflater;)V",
+                                    false);
+                            extraStack[0] = 3;
+                            changed[0] = true;
+                            return;
                         }
                         if (op == Opcodes.INVOKESPECIAL && mname.equals("<init>")) {
                             for (CtorAdapter a : CTOR_ADAPTERS) {
