@@ -126,6 +126,7 @@ tasks.register('compileWeb', JavaExec) {
     outputs.dir(teavmOut)
     doFirst {
         systemProperty 'retro.classes', prepared.get().file('classes.txt').asFile
+        if (findProperty('dumpCallGraph')) systemProperty 'retro.dumpCallGraph', findProperty('dumpCallGraph')
         systemProperty 'retro.byname', prepared.get().file('byname.txt').asFile
         systemProperty 'retro.methods', prepared.get().file('methods.txt').asFile
         systemProperty 'retro.unresolved', layout.buildDirectory.file('unresolved.txt').get().asFile
