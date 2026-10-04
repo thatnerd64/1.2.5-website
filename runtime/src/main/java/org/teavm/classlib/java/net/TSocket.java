@@ -183,7 +183,7 @@ public class TSocket implements java.io.Closeable {
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
         closed = true;
         if (connection != null) {
             connection.close();

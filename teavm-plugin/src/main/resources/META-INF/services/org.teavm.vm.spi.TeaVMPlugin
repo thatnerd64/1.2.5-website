@@ -1,2 +1,3 @@
 retro.teavm.ByNamePlugin
 retro.teavm.LazyLinkingPlugin
+retro.teavm.UnsynchronizePlugin

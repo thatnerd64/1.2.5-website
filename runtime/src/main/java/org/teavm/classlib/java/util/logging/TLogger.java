@@ -19,7 +19,7 @@ public class TLogger {
         this.name = name;
     }
 
-    private static synchronized TLogger root() {
+    private static TLogger root() {
         if (root == null) {
             root = new TLogger("", null);
             root.level = TLevel.INFO;
@@ -29,7 +29,7 @@ public class TLogger {
         return root;
     }
 
-    public static synchronized TLogger getLogger(String name) {
+    public static TLogger getLogger(String name) {
         TLogManager manager = TLogManager.getLogManager();
         TLogger logger = manager.loggers.get(name);
         if (logger == null) {
@@ -95,15 +95,15 @@ public class TLogger {
         return level.intValue() >= min && min != TLevel.OFF.intValue();
     }
 
-    public synchronized void addHandler(THandler handler) {
+    public void addHandler(THandler handler) {
         handlers.add(handler);
     }
 
-    public synchronized void removeHandler(THandler handler) {
+    public void removeHandler(THandler handler) {
         handlers.remove(handler);
     }
 
-    public synchronized THandler[] getHandlers() {
+    public THandler[] getHandlers() {
         return handlers.toArray(new THandler[0]);
     }
 

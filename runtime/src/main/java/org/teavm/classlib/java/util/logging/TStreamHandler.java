@@ -18,14 +18,14 @@ public class TStreamHandler extends THandler {
         setOutputStream(out);
     }
 
-    protected synchronized void setOutputStream(OutputStream out) {
+    protected void setOutputStream(OutputStream out) {
         flushAndClose();
         writer = out == null ? null : new OutputStreamWriter(out, java.nio.charset.StandardCharsets.UTF_8);
         headWritten = false;
     }
 
     @Override
-    public synchronized void publish(TLogRecord record) {
+    public void publish(TLogRecord record) {
         if (writer == null || !isLoggable(record)) {
             return;
         }
@@ -41,7 +41,7 @@ public class TStreamHandler extends THandler {
     }
 
     @Override
-    public synchronized void flush() {
+    public void flush() {
         if (writer != null) {
             try {
                 writer.flush();
@@ -67,7 +67,7 @@ public class TStreamHandler extends THandler {
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
         flushAndClose();
     }
 }
