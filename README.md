@@ -147,6 +147,11 @@ with WorldEdit (`/give`, `//pos1`, `//wand`), and saving a world, reloading the 
   less. A saved launcher choice is kept.) The GL emulation merges the many tiny draws of text, HUD icons and mob models into a
   few (about 350 draw calls a frame down to about 120 in a test world). On the CPU-only test machine (software
   WebGL) a fresh world runs at about 11 FPS; a desktop browser with a real GPU does considerably better.
+  Press F8 (or tick "Show performance stats" in the launcher) for an overlay with the FPS, how long the game's
+  JavaScript runs per frame, how long the browser then makes it wait, and your GPU. A frame that is nearly all
+  JavaScript time is limited by the CPU (game and mod code); one that mostly waits is limited by the GPU or the
+  display. A frame that already ran longer than one screen refresh is followed by the next one at once instead of
+  idling until the next refresh; add `?vsync` to the address to turn that off.
 * **Networked extras don't work in a browser**: update checks, Mojang skin lookups (LumySkinPatch) and
   CraftPresence's Discord status fail quietly (CORS / no local IPC).
 * Keys and clicks: a press is always seen by the game for at least a frame, so quick taps register even in

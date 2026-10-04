@@ -29,6 +29,7 @@
   h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: .5px; }
   .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  label.check { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; cursor: pointer; }
   input[type=text], select { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);
     background: #111114; color: var(--text); font-size: 15px; }
   button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid transparent; padding: 11px 16px; }
@@ -47,12 +48,16 @@
   #detail { font-size: 13px; color: var(--muted); min-height: 18px; margin-top: 4px; }
   pre { white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow: auto; font-size: 12px;
     background: #0e0e10; border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  #perf { position: fixed; top: 6px; right: 6px; z-index: 5; padding: 6px 9px; border-radius: 6px; pointer-events: none;
+    background: rgba(0,0,0,.62); color: #dfe; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre; }
   .hidden { display: none !important; }
   .wide { max-width: 760px; }
 </style>
 </head>
 <body>
 <canvas id="game" tabindex="0" class="hidden"></canvas>
+<div id="perf" class="hidden"></div>
 
 <div id="launcher" class="overlay">
   <div class="card">
@@ -70,6 +75,7 @@
     </select>
     <label for="proxy">Multiplayer relay (optional)</label>
     <input id="proxy" type="text" placeholder="ws://localhost:25566" autocomplete="off" spellcheck="false">
+    <label class="check"><input id="stats" type="checkbox"> Show performance stats (F8 toggles in game)</label>
     <button id="play" class="play">Play</button>
     <div class="row">
       <button id="export" class="ghost">Export saves</button>
@@ -115,6 +121,7 @@
   $('username').value = prefs.username || ('Player' + Math.floor(Math.random() * 900 + 100));
   if (prefs.scale) $('scale').value = prefs.scale;
   if (prefs.proxy) $('proxy').value = prefs.proxy;
+  $('stats').checked = !!prefs.stats;
 
   function show(id) {
     ['launcher', 'loading', 'failure'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); });
@@ -152,8 +159,9 @@
 
   $('play').addEventListener('click', function () {
     var name = $('username').value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 16) || 'Player';
-    prefs = { username: name, scale: $('scale').value, proxy: $('proxy').value.trim() };
+    prefs = { username: name, scale: $('scale').value, proxy: $('proxy').value.trim(), stats: $('stats').checked };
     try { localStorage.setItem(STORAGE + ':prefs', JSON.stringify(prefs)); } catch (e) {}
+    setStats(prefs.stats);
     window.retroConfig = { username: name, resolutionScale: prefs.scale, storageName: STORAGE, proxy: prefs.proxy };
     if (window.__retroAudioResume) window.__retroAudioResume();
     show('loading');
@@ -212,6 +220,72 @@
       };
     };
   });
+
+  // ---- performance stats -------------------------------------------------------------------------------------
+  // The game reports (retro.gl.Display) when a frame starts and when it asks for the next one, which gives how long
+  // each frame ran JavaScript and how long it then waited. A frame that is nearly all JavaScript time is limited by
+  // the game code (the CPU); one that mostly waits is limited by the GPU, the compositor or the display's refresh.
+  var perf = { on: false, start: 0, last: 0, n: 0, work: 0, worst: 0, since: 0, gpu: '' };
+  window.retroPerf = {
+    // the game asks for its next frame (its work for this frame is done) ...
+    ask: function (now) { if (perf.start) perf.work += now - perf.start; },
+    // ... and a frame starts
+    begin: function (now) {
+      if (perf.last) {
+        var gap = now - perf.last;
+        perf.n++;
+        if (gap > perf.worst) perf.worst = gap;
+      }
+      perf.last = perf.start = now;
+      if (!perf.since) perf.since = now;
+      if (perf.on && now - perf.since >= 500) report(now);
+    }
+  };
+  function report(now) {
+    var span = now - perf.since, frames = Math.max(perf.n, 1);
+    var interval = span / frames, work = perf.work / frames, busy = Math.min(100, 100 * perf.work / span);
+    var c = $('game');
+    if (!perf.gpu) {
+      try {
+        var gl = c.getContext('webgl2');
+        var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+        perf.gpu = gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : 'unknown';
+      } catch (e) { perf.gpu = 'unknown'; }
+    }
+    $('perf').textContent =
+      'FPS ' + (1000 / interval).toFixed(1) + '   frame ' + interval.toFixed(1) + ' ms\n' +
+      'JS  ' + work.toFixed(1) + ' ms (' + busy.toFixed(0) + '% of the frame)\n' +
+      'wait ' + Math.max(0, interval - work).toFixed(1) + ' ms   worst ' + perf.worst.toFixed(0) + ' ms\n' +
+      (busy >= 85 ? 'limit: game code (CPU)' : 'limit: GPU / display (waiting)') + '\n' +
+      c.width + 'x' + c.height + ' @' + window.devicePixelRatio + 'x  ' + perf.gpu;
+    perf.n = 0; perf.work = 0; perf.worst = 0; perf.since = now;
+  }
+  // The display's refresh interval, measured while the launcher sits idle: the game uses it to tell a frame that
+  // is already late (and should be followed immediately by the next) from one that should wait for the refresh.
+  (function () {
+    // ?vsync keeps strict one-frame-per-refresh pacing (no immediate follow-up frames), to compare against
+    if (/[?&]vsync(=|&|$)/.test(location.search)) { window.retroRefreshMs = 1e9; return; }
+    var stamps = [];
+    function tick(t) {
+      stamps.push(t);
+      if (stamps.length < 45) { requestAnimationFrame(tick); return; }
+      var gaps = [];
+      for (var i = 2; i < stamps.length; i++) gaps.push(stamps[i] - stamps[i - 1]);
+      gaps.sort(function (x, y) { return x - y; });
+      var median = gaps[gaps.length >> 1];
+      if (median >= 3 && median <= 40) window.retroRefreshMs = median;
+    }
+    requestAnimationFrame(tick);
+  })();
+  function setStats(on) {
+    perf.on = on;
+    $('perf').classList.toggle('hidden', !on);
+    perf.n = 0; perf.work = 0; perf.worst = 0; perf.since = 0;
+  }
+  setStats(!!prefs.stats);
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'F8' && !$('game').classList.contains('hidden')) { setStats(!perf.on); e.preventDefault(); }
+  }, true);
 })();
 </script>
 </body>

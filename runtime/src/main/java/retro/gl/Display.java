@@ -121,7 +121,36 @@ public final class Display {
         }
     }
 
-    @JSBody(params = "cb", script = "requestAnimationFrame(function() { cb(); });")
+    /**
+     * Starts the next frame. Normally that waits for the browser's next animation frame (one per display refresh),
+     * but a frame that has already run for at least a whole refresh interval would only sit idle until the next
+     * refresh: a 20 ms frame on a 60 Hz display would become a 33 ms one, a 35 ms frame a 50 ms one. Such a frame
+     * is followed by the next one straight away, from a message-channel task (not a timer, which browsers delay).
+     * The page measures the refresh interval while its launcher is idle ({@code retroRefreshMs}) and may install
+     * {@code retroPerf} hooks for its statistics overlay; {@code retroFrames} counts frames started.
+     */
+    @JSBody(params = "cb", script = ""
+            + "var p = window.retroPacing || (window.retroPacing = { start: 0, next: null, channel: null });"
+            + "var hooks = window.retroPerf;"
+            + "var now = performance.now();"
+            + "if (hooks) hooks.ask(now);"
+            + "function begin() {"
+            + "  var t = performance.now();"
+            + "  p.start = t;"
+            + "  window.retroFrames = (window.retroFrames || 0) + 1;"
+            + "  if (hooks) hooks.begin(t);"
+            + "  cb();"
+            + "}"
+            + "if (p.start && now - p.start >= (window.retroRefreshMs || 16.7)) {"
+            + "  if (!p.channel) {"
+            + "    p.channel = new MessageChannel();"
+            + "    p.channel.port1.onmessage = function() { var f = p.next; p.next = null; if (f) f(); };"
+            + "  }"
+            + "  p.next = begin;"
+            + "  p.channel.port2.postMessage(0);"
+            + "} else {"
+            + "  requestAnimationFrame(begin);"
+            + "}")
     private static native void requestFrame(FrameCallback cb);
 
     public static boolean isActive() {
