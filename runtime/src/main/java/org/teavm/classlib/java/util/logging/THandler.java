@@ -16,7 +16,7 @@ public abstract class THandler {
 
     public abstract void close() throws SecurityException;
 
-    public void setFormatter(TFormatter formatter) {
+    public synchronized void setFormatter(TFormatter formatter) {
         this.formatter = formatter;
     }
 
@@ -24,7 +24,7 @@ public abstract class THandler {
         return formatter;
     }
 
-    public void setEncoding(String encoding) {
+    public synchronized void setEncoding(String encoding) {
         this.encoding = encoding;
     }
 
@@ -32,7 +32,7 @@ public abstract class THandler {
         return encoding;
     }
 
-    public void setFilter(TFilter filter) {
+    public synchronized void setFilter(TFilter filter) {
         this.filter = filter;
     }
 
@@ -40,7 +40,7 @@ public abstract class THandler {
         return filter;
     }
 
-    public void setErrorManager(TErrorManager em) {
+    public synchronized void setErrorManager(TErrorManager em) {
         this.errorManager = em;
     }
 
@@ -52,7 +52,7 @@ public abstract class THandler {
         errorManager.error(msg, ex, code);
     }
 
-    public void setLevel(TLevel level) {
+    public synchronized void setLevel(TLevel level) {
         this.level = level;
     }
 

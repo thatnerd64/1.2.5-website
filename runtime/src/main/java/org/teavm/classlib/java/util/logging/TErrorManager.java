@@ -8,7 +8,7 @@ public class TErrorManager {
     public static final int OPEN_FAILURE = 4;
     public static final int FORMAT_FAILURE = 5;
 
-    public void error(String msg, Exception ex, int code) {
+    public synchronized void error(String msg, Exception ex, int code) {
         retro.JS.error("java.util.logging.ErrorManager: " + code + (msg != null ? ": " + msg : ""));
     }
 }

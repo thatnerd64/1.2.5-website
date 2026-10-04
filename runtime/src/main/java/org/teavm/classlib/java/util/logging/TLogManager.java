@@ -16,11 +16,11 @@ public class TLogManager {
         return INSTANCE;
     }
 
-    public TLogger getLogger(String name) {
+    public synchronized TLogger getLogger(String name) {
         return loggers.get(name);
     }
 
-    public boolean addLogger(TLogger logger) {
+    public synchronized boolean addLogger(TLogger logger) {
         if (loggers.containsKey(logger.getName())) {
             return false;
         }
@@ -28,7 +28,7 @@ public class TLogManager {
         return true;
     }
 
-    public Enumeration<String> getLoggerNames() {
+    public synchronized Enumeration<String> getLoggerNames() {
         return java.util.Collections.enumeration(new java.util.ArrayList<>(loggers.keySet()));
     }
 

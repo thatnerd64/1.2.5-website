@@ -14,7 +14,7 @@ public abstract class TFormatter {
         return "";
     }
 
-    public String formatMessage(TLogRecord record) {
+    public synchronized String formatMessage(TLogRecord record) {
         String format = record.getMessage();
         Object[] parameters = record.getParameters();
         if (format == null || parameters == null || parameters.length == 0) {
