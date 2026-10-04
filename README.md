@@ -141,8 +141,10 @@ RedPower, EE2 and Wireless Redstone), Inventory Tweaks, Rei's Minimap, Block Hel
 with WorldEdit (`/give`, `//pos1`, `//wand`), and saving a world, reloading the page and continuing it.
 
 * **Performance** depends heavily on the machine. New players start with browser-friendly video settings
-  (Short render distance, Fast graphics, no smooth lighting or clouds, fewer particles); raise them in Options
-  if your machine keeps up. The GL emulation merges the many tiny draws of text, HUD icons and mob models into a
+  (Short render distance, Fast graphics, no smooth lighting or clouds, fewer particles) and a 75% render
+  resolution in the launcher; raise them in Options and the launcher if your machine keeps up. (On the software
+  WebGL test machine, 50% resolution ran a seeded world at about 17.5 FPS against 11.5 at 100%; a real GPU gains
+  less. A saved launcher choice is kept.) The GL emulation merges the many tiny draws of text, HUD icons and mob models into a
   few (about 350 draw calls a frame down to about 120 in a test world). On the CPU-only test machine (software
   WebGL) a fresh world runs at about 11 FPS; a desktop browser with a real GPU does considerably better.
 * **Networked extras don't work in a browser**: update checks, Mojang skin lookups (LumySkinPatch) and
