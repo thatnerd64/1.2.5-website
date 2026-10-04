@@ -10,11 +10,11 @@ public final class Shutdown {
     private Shutdown() {
     }
 
-    public static synchronized void add(Thread hook) {
+    public static void add(Thread hook) {
         hooks.add(hook);
     }
 
-    public static synchronized boolean remove(Thread hook) {
+    public static boolean remove(Thread hook) {
         return hooks.remove(hook);
     }
 }
