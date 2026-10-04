@@ -22,7 +22,7 @@ final class GenericSignatures {
     private GenericSignatures() {
     }
 
-    private static Map<String, String> signatures() {
+    private static synchronized Map<String, String> signatures() {
         if (signatures == null) {
             signatures = new HashMap<>();
             byte[] data = Resources.read("retro/generic-supers.txt");

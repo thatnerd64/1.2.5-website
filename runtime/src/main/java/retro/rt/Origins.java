@@ -16,7 +16,7 @@ public final class Origins {
     private Origins() {
     }
 
-    private static Map<String, String> load() {
+    private static synchronized Map<String, String> load() {
         if (origins == null) {
             origins = new HashMap<>();
             byte[] data = Resources.read("retro/origins.txt");

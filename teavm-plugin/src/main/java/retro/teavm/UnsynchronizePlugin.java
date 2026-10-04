@@ -23,8 +23,7 @@ import org.teavm.vm.spi.TeaVMPlugin;
  * calls those, into resumable code. Without this plugin about half of all compiled methods were.
  *
  * <p>The threads are cooperative: they switch only where a method suspends (sleep, wait, I/O). None of the
- * methods listed here does that inside its critical sections, so dropping the lock changes nothing. The same
- * goes for a class initializer: one synchronized method it calls makes every class that touches it resumable.
+ * methods listed here does that inside its critical sections, so dropping the lock changes nothing.
  */
 public class UnsynchronizePlugin implements TeaVMPlugin {
     private static final Set<String> CLASSES = Set.of(
@@ -35,19 +34,7 @@ public class UnsynchronizePlugin implements TeaVMPlugin {
             "java.io.PushbackReader",
             "java.io.OutputStreamWriter",
             // a mod's synchronized wrapper around two HashMaps (overrides Map.put/remove/clear)
-            "buildcraft.additionalpipes.util.BidiMap",
-            // Minecraft's GLAllocation (static synchronized buffer allocators), used by many class initializers
-            "ew",
-            // library code that locks around plain computation or one-time setup, reached from class initializers
-            // or overriding common methods (read, run, close)
-            "org.newsclub.net.unix.NativeLibraryLoader",
-            "com.gitlab.cdagaming.craftpresence.utils.ImageUtils",
-            "external.org.slf4j.LoggerFactory",
-            "external.org.slf4j.helpers.SubstituteLoggerFactory",
-            "com.google.gson.DefaultDateTypeAdapter",
-            "com.google.gson.internal.bind.DateTypeAdapter",
-            "com.google.gson.internal.bind.SqlDateTypeAdapter",
-            "com.google.gson.internal.bind.TimeTypeAdapter");
+            "buildcraft.additionalpipes.util.BidiMap");
 
     @Override
     public void install(TeaVMHost host) {
