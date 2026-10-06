@@ -22,6 +22,9 @@ public final class Compile {
             opts.put(args[i].replaceFirst("^--", ""), args[i + 1]);
         }
         boolean dev = Boolean.parseBoolean(opts.getOrDefault("dev", "false"));
+        // Profiling build: the release optimizations, but readable function names and TeaVM's debug information
+        // (classes.js.teavmdbg), which ProfileSymbols turns into the method names tools/benchmark.js reports.
+        boolean profile = Boolean.parseBoolean(opts.getOrDefault("profile", "false"));
         List<File> classPath = new ArrayList<>();
         for (String entry : opts.get("classpath").split(File.pathSeparator)) {
             if (!entry.isBlank()) {
@@ -35,13 +38,16 @@ public final class Compile {
         tool.setTargetDirectory(new File(opts.get("out")));
         tool.setTargetFileName("classes.js");
         tool.setClassPath(classPath);
-        tool.setObfuscated(!dev);
+        tool.setObfuscated(!dev && !profile);
         tool.setOptimizationLevel(dev ? TeaVMOptimizationLevel.SIMPLE : TeaVMOptimizationLevel.ADVANCED);
-        tool.setDebugInformationGenerated(false);
+        tool.setDebugInformationGenerated(profile);
         tool.setSourceMapsFileGenerated(dev);
         if (!dev) {
             // Don't ship a source map left over from an earlier development build.
             new File(opts.get("out"), "classes.js.map").delete();
+        }
+        if (!profile) {
+            new File(opts.get("out"), "classes.js.teavmdbg").delete();
         }
         tool.setStrict(false);
         if (opts.containsKey("cache")) {

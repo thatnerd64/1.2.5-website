@@ -2,12 +2,15 @@
 //
 //   ./gradlew build        -> dist/ (static site: open with any web server)
 //   ./gradlew build -PdevBuild=true   (faster, readable JS)
+//   ./gradlew build -PprofileBuild=true   (release speed, readable names + profile-symbols.json for
+//                                          tools/benchmark.js)
 //
 // Inputs: input/minecraft.jar (your own jar, never committed) and modpack/ (mods + configs).
 
 def teavmVersion = property('teavmVersion')
 def asmVersion = property('asmVersion')
 def devBuild = (findProperty('devBuild') ?: 'false').toBoolean()
+def profileBuild = (findProperty('profileBuild') ?: 'false').toBoolean()
 
 allprojects {
     repositories {
@@ -98,8 +101,18 @@ project(':gameglue') {
 
 configurations {
     teavmClasslib
+    // MCP 6.2 names (conf/client.srg, conf/methods.csv) for profile builds, from Forge's 1.2.5 source zip.
+    mcpMappings
+}
+repositories {
+    maven {
+        url 'https://maven.minecraftforge.net'
+        metadataSources { mavenPom(); artifact() }
+        content { includeModule('net.minecraftforge', 'forge') }
+    }
 }
 dependencies {
+    mcpMappings 'net.minecraftforge:forge:1.2.5-3.4.9.171:src@zip'
     teavmClasslib "org.teavm:teavm-classlib:$teavmVersion"
     teavmClasslib "org.teavm:teavm-jso-apis:$teavmVersion"
     teavmClasslib "org.teavm:teavm-jso-impl:$teavmVersion"
@@ -120,6 +133,7 @@ tasks.register('compileWeb', JavaExec) {
     maxHeapSize = (findProperty('teavmHeap') ?: '11g')
     inputs.files(gameJar)
     inputs.property('devBuild', devBuild)
+    inputs.property('profileBuild', profileBuild)
     inputs.files(project(':teavm-plugin').tasks.named('jar'))
     inputs.files(project(':runtime').tasks.named('jar'), project(':gameglue').tasks.named('jar'))
     outputs.dir(teavmOut)
@@ -134,7 +148,29 @@ tasks.register('compileWeb', JavaExec) {
         args '--out', teavmOut.get().asFile,
              '--classpath', cp.join(File.pathSeparator),
              '--dev', devBuild,
+             '--profile', profileBuild,
              '--cache', layout.buildDirectory.dir('teavm-cache').get().asFile
+    }
+}
+
+def profileOut = layout.buildDirectory.dir('profile')
+
+// Profile builds: which Java (MCP) method each part of classes.js comes from, for tools/benchmark.js.
+tasks.register('profileSymbols', JavaExec) {
+    group = 'build'
+    description = 'Maps the profile build\'s JavaScript to Minecraft method names (dist/profile-symbols.json).'
+    dependsOn 'compileWeb'
+    classpath = project(':buildtools').sourceSets.main.runtimeClasspath
+    mainClass = 'retro.build.ProfileSymbols'
+    inputs.dir(teavmOut)
+    outputs.dir(profileOut)
+    doFirst {
+        // -PmcpZip=path uses a local copy; without either the report keeps Minecraft's obfuscated names.
+        def zip = findProperty('mcpZip') ?: configurations.mcpMappings.incoming.artifactView { lenient = true }
+                .files.files.find { true }
+        args '--debug', teavmOut.get().file('classes.js.teavmdbg').asFile,
+             '--mcp', zip ?: '',
+             '--out', profileOut.get().file('profile-symbols.json').asFile
     }
 }
 
@@ -143,8 +179,12 @@ tasks.register('dist', Sync) {
     description = 'Assembles the static web site in dist/.'
     dependsOn 'compileWeb', 'prepareGame'
     from('web')
-    from(teavmOut)
+    from(teavmOut) { exclude '*.teavmdbg' }
     from(prepared.map { it.dir('web') })
+    if (profileBuild) {
+        dependsOn 'profileSymbols'
+        from(profileOut)
+    }
     into 'dist'
 }
 

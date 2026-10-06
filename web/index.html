@@ -153,8 +153,16 @@
   $('play').addEventListener('click', function () {
     var name = $('username').value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 16) || 'Player';
     prefs = { username: name, scale: $('scale').value, proxy: $('proxy').value.trim() };
-    try { localStorage.setItem(STORAGE + ':prefs', JSON.stringify(prefs)); } catch (e) {}
-    window.retroConfig = { username: name, resolutionScale: prefs.scale, storageName: STORAGE, proxy: prefs.proxy };
+    // Benchmark runs (js/benchmark.js) keep their world and settings apart from the player's.
+    var bench = window.retroBenchmarkConfig;
+    if (!bench) {
+      try { localStorage.setItem(STORAGE + ':prefs', JSON.stringify(prefs)); } catch (e) {}
+    }
+    window.retroConfig = { username: name, resolutionScale: prefs.scale, storageName: bench ? STORAGE + '-benchmark' : STORAGE,
+      proxy: prefs.proxy };
+    if (bench) {
+      for (var key in bench) window.retroConfig[key] = bench[key];
+    }
     if (window.__retroAudioResume) window.__retroAudioResume();
     show('loading');
     $('game').classList.remove('hidden');
@@ -214,5 +222,6 @@
   });
 })();
 </script>
+<script src="js/benchmark.js"></script>
 </body>
 </html>

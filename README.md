@@ -49,6 +49,7 @@ cp -r /path/to/.minecraft/resources input/resources             # optional: soun
 ```
 
 `./gradlew build -PdevBuild=true` produces readable (unminified) JavaScript for debugging.
+`./gradlew build -PprofileBuild=true` is a release build that names its functions, for [benchmarking](#benchmarking).
 `-PexcludeMods=CraftPresence-Forge-1.2.5-Release-1.9.6.jar,...` leaves mods out.
 
 Serve `dist/` with any static web server and open it:
@@ -132,6 +133,46 @@ login, terrain, chat, two players seeing each other and joining/leaving, breakin
 going down, an online-mode server, a missing or stopped relay, direct `ws://` addresses, and 75 seconds in a
 hidden tab. A real Forge server with the full mod set has not been tried yet.
 
+## Benchmarking
+
+[`tools/benchmark.js`](tools/benchmark.js) measures the game on your computer, in Chrome, Edge or Chromium: frame
+rates, and where the time goes. It needs Node.js 22+ and nothing else.
+
+```sh
+./gradlew build -PprofileBuild=true     # as fast as a normal build, but the report can name functions
+node tools/benchmark.js                 # about 3 minutes
+```
+
+It serves `dist/`, starts the browser with a fresh temporary profile (your saves and settings are not touched) and
+opens the game in benchmark mode: the game creates a new world from a fixed seed, stands still for 20 s while the spawn
+area loads, then measures 30 s standing still and 30 s walking forward while weaving left and right (new chunks load
+and are built). Keep its window visible until it closes. The report is printed and saved, with the raw data, in
+`benchmark-results/<date>/`:
+
+* For each phase: average FPS, 1% low, median/95th/99th percentile frame times, the number of entities, and how busy
+  the page's main thread (where the game runs) and the GPU process were. A main thread near 100% means the game's code
+  limits the frame rate; well below that with a busy GPU process means the GPU or its driver does.
+* With a profile build, where the main thread's time goes: the game tick (entity AI, movement, block ticks...), chunk
+  saving, rendering (chunk building, terrain, entities...), mods and garbage collection; by code layer (game code, Java
+  class library, TeaVM's runtime, GL emulation); and the hottest functions, by their Minecraft (MCP) names.
+
+Options (`--help` lists them all): `--seed TEXT`; phase lengths `--warmup`, `--idle`, `--walk` (seconds); game
+settings `--render far|normal|short|tiny`, `--graphics fancy|fast`, `--smooth on|off`, `--clouds on|off`,
+`--difficulty peaceful|easy|normal|hard` (the default is the game's settings for new players); `--size 1920x1080`;
+`--vsync` to cap the frame rate at the display's refresh rate (by default it is uncapped, to show the headroom);
+`--no-profile` for frame rates without the profiler's few percent of overhead; `--browser PATH`. Compare runs with
+the same seed, size and settings.
+
+The `<phase>.cpuprofile` files open in Chrome DevTools (Performance panel, *Load profile*), and
+`node tools/profile-report.js <file>.cpuprofile` summarises one again. Without Node.js, open the page yourself with
+`?benchmark` (for example `http://localhost:8080/?benchmark=myseed&render=far`): it runs the same phases and shows the
+frame rates at the end.
+
+A profile build is a release build with readable JavaScript names plus `dist/profile-symbols.json`, which maps them
+to Minecraft's method names with MCP 6.2's mappings from Forge's 1.2.5 source zip (downloaded from
+maven.minecraftforge.net when needed; `-PmcpZip=path` uses a local copy). Its `classes.js` is about three times
+larger, so play with a normal build.
+
 ## Status
 
 Tested in headless Chromium (software WebGL) with all 46 FML mods of the pack loaded, plus its jar mods: the
@@ -169,4 +210,4 @@ with WorldEdit (`/give`, `//pos1`, `//wand`), and saving a world, reloading the 
 | `web/` | Page, launcher, Web Audio OpenAL (`js/al.js`) |
 | `modpack/` | Full Retro mods and configs |
 | `input/` | Your `minecraft.jar` and resources (git-ignored) |
-| `tools/` | `ws-proxy.js`: WebSocket → TCP relay for multiplayer |
+| `tools/` | `ws-proxy.js`: WebSocket → TCP relay for multiplayer; `benchmark.js`, `profile-report.js`: benchmarks |

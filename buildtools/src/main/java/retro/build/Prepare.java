@@ -309,6 +309,16 @@ public final class Prepare {
                 log.add("ChunkProvider: unexpected shape, chunk cache not installed");
             }
         }
+        // Benchmark mode (?benchmark in the page URL): runGameLoop calls RetroBenchmark.frame (gameglue).
+        if (patched.containsKey("net/minecraft/client/Minecraft")) {
+            byte[] hooked = Patches.benchmarkHook(patched.get("net/minecraft/client/Minecraft"));
+            if (hooked != null) {
+                patched.put("net/minecraft/client/Minecraft", hooked);
+                log.add("Minecraft: runGameLoop calls RetroBenchmark.frame");
+            } else {
+                log.add("Minecraft: unexpected shape, benchmark hook not installed");
+            }
+        }
         // Class names built at runtime from a package plus a constant suffix (IC2: getPackage() + ".common.X"):
         // classes whose dotted name ends with a string constant of the form ".a.B" or "a.B" become loadable by name.
         Map<String, List<String>> bySuffix = new HashMap<>();

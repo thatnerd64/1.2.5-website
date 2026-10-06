@@ -320,6 +320,30 @@ final class Patches {
     }
 
     /**
+     * Benchmark mode: Minecraft's {@code x()V} (runGameLoop) first calls {@code RetroBenchmark.frame(this)}
+     * (gameglue), which does nothing unless the page asked for a benchmark. Returns null when the method is missing
+     * (another Minecraft version), leaving the class untouched.
+     */
+    static byte[] benchmarkHook(byte[] bytes) {
+        org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+        new ClassReader(bytes).accept(node, 0);
+        for (org.objectweb.asm.tree.MethodNode m : node.methods) {
+            if (m.name.equals("x") && m.desc.equals("()V") && (m.access & Opcodes.ACC_STATIC) == 0) {
+                org.objectweb.asm.tree.InsnList call = new org.objectweb.asm.tree.InsnList();
+                call.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.ALOAD, 0));
+                call.add(new org.objectweb.asm.tree.MethodInsnNode(Opcodes.INVOKESTATIC, "RetroBenchmark", "frame",
+                        "(Lnet/minecraft/client/Minecraft;)V", false));
+                m.instructions.insert(call);
+                m.maxStack = Math.max(m.maxStack, 1);
+                ClassWriter writer = new ClassWriter(0);
+                node.accept(writer);
+                return writer.toByteArray();
+            }
+        }
+        return null;
+    }
+
+    /**
      * Routes ChunkProvider's chunk lookups through {@code RetroChunkCache} (gameglue): the original
      * {@code b(II)Lack;} (provideChunk) and {@code a(II)Z} (chunkExists) are renamed and replaced by
      * straight-line methods calling the cache, which falls back to the originals. Returns null when the class

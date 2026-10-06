@@ -125,7 +125,8 @@ public final class Display {
     private static native void requestFrame(FrameCallback cb);
 
     public static boolean isActive() {
-        return hasFocus();
+        // A benchmark keeps running when its window loses focus instead of opening the game menu (which pauses).
+        return hasFocus() || retro.Benchmark.enabled();
     }
 
     @JSBody(script = "return document.hasFocus() && !document.hidden;")
