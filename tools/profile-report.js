@@ -213,7 +213,11 @@ function format(a, top = 25) {
   out.push(`Main thread busy ${a.busyPercent}% of ${a.seconds} s (the rest is waiting for the next frame).`);
   out.push(`Inside WebGL calls: ${a.webglPercent}% of the busy time (includes waiting for the GPU).`);
   if (!a.named) {
-    out.push('No function names: this is not a profile build (./gradlew build -PprofileBuild=true).');
+    // Minified names can't be told apart from TeaVM's runtime or attributed to game phases.
+    const share = (name) => (a.phases.find((p) => p.name === name) || { percent: 0 }).percent;
+    out.push(`Garbage collection: ${share('Garbage collection')}% of the busy time.`);
+    out.push('For where the rest goes, use a profile build (./gradlew build -PprofileBuild=true).');
+    return out.join('\n');
   }
   out.push('');
   out.push('Where the busy time goes'.padEnd(58) + '% busy'.padStart(7));
