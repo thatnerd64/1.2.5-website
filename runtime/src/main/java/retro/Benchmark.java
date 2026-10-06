@@ -5,7 +5,8 @@ import org.teavm.jso.JSBody;
 /**
  * Benchmark mode: the page was opened with {@code ?benchmark=SEED} (web/js/benchmark.js, tools/benchmark.js).
  * The game side ({@code RetroBenchmark} in gameglue) reports its state here and reads what the page asks for, through
- * {@code window.__retroBenchmark}.
+ * {@code window.__retroBenchmark}. The scripts' local variable is called {@code bench}: the release build renames the
+ * parameters to b, c, d... without looking at the script, so a local "b" would replace the first one.
  */
 public final class Benchmark {
     private static int enabled = -1;
@@ -32,15 +33,16 @@ public final class Benchmark {
     }
 
     /** "title", "ingame" or "menu" (a screen is open in game). */
-    @JSBody(params = "state", script = "var b = window.__retroBenchmark; if (b) b.state = state;")
+    @JSBody(params = "state", script = "var bench = window.__retroBenchmark; if (bench) bench.state = state;")
     public static native void state(String state);
 
     @JSBody(params = { "entities", "chunks", "x", "y", "z", "settings" }, script = ""
-            + "var b = window.__retroBenchmark; if (!b) return;"
-            + "b.entities = entities; b.chunks = chunks; b.x = x; b.y = y; b.z = z; b.settings = settings;")
+            + "var bench = window.__retroBenchmark; if (!bench) return;"
+            + "bench.entities = entities; bench.chunks = chunks; bench.x = x; bench.y = y; bench.z = z;"
+            + "bench.settings = settings;")
     public static native void stats(int entities, String chunks, double x, double y, double z, String settings);
 
     /** Whether the page asks for the player to walk (the "walk" phase). */
-    @JSBody(script = "var b = window.__retroBenchmark; return !!(b && b.walk);")
+    @JSBody(script = "var bench = window.__retroBenchmark; return !!(bench && bench.walk);")
     public static native boolean walking();
 }
