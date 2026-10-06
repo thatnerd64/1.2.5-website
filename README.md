@@ -149,9 +149,10 @@ area loads, then measures 30 s standing still and 30 s walking forward while wea
 and are built). Keep its window visible until it closes. The report is printed and saved, with the raw data, in
 `benchmark-results/<date>/`:
 
-* For each phase: average FPS, 1% low, median/95th/99th percentile frame times, the number of entities, and how busy
-  the page's main thread (where the game runs) and the GPU process were. A main thread near 100% means the game's code
-  limits the frame rate; well below that with a busy GPU process means the GPU or its driver does.
+* For each phase: average FPS, 1% low, median/95th/99th percentile frame times, the number of entities, how busy the
+  page's main thread (where the game runs) was and how much of that was inside WebGL calls. A main thread near 100%
+  busy means the game's code limits the frame rate; well below 100% at the display's refresh rate means headroom, and
+  at a lower rate that the GPU limits it.
 * With a profile build, where the main thread's time goes: the game tick (entity AI, movement, block ticks...), chunk
   saving, rendering (chunk building, terrain, entities...), mods and garbage collection; by code layer (game code, Java
   class library, TeaVM's runtime, GL emulation); and the hottest functions, by their Minecraft (MCP) names.
@@ -159,9 +160,9 @@ and are built). Keep its window visible until it closes. The report is printed a
 Options (`--help` lists them all): `--seed TEXT`; phase lengths `--warmup`, `--idle`, `--walk` (seconds); game
 settings `--render far|normal|short|tiny`, `--graphics fancy|fast`, `--smooth on|off`, `--clouds on|off`,
 `--difficulty peaceful|easy|normal|hard` (the default is the game's settings for new players); `--size 1920x1080`;
-`--vsync` to cap the frame rate at the display's refresh rate (by default it is uncapped, to show the headroom);
-`--no-profile` for frame rates without the profiler's few percent of overhead; `--browser PATH`. Compare runs with
-the same seed, size and settings.
+`--uncapped` to let the frame rate go above the display's refresh rate (not with software WebGL, which then stalls);
+`--no-profile` for frame rates without the profiler's overhead; `--browser PATH`. Compare runs with the same seed,
+size and settings.
 
 The `<phase>.cpuprofile` files open in Chrome DevTools (Performance panel, *Load profile*), and
 `node tools/profile-report.js <file>.cpuprofile` summarises one again. Without Node.js, open the page yourself with

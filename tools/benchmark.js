@@ -7,8 +7,8 @@
 //
 // It serves dist/ itself, starts the browser with a fresh temporary profile and opens the page in benchmark mode
 // (index.html?benchmark=SEED, see web/js/benchmark.js): the game creates a new world from the seed, waits while the
-// spawn area loads, then measures standing still and walking around. During each measured phase it records a CPU
-// profile of the page and a trace of how busy the page's main thread and the GPU process are.
+// spawn area loads, then measures standing still and walking around, recording a CPU profile of the page during each
+// measured phase (the page waits for the profiler to start, so starting and stopping it is not measured).
 //
 // Writes report.txt (also printed), results.json, and <phase>.cpuprofile for each phase, which Chrome DevTools can
 // open (Performance panel > Load profile) for a closer look. Run with --help for the options.
@@ -33,8 +33,9 @@ const HELP = `Usage: node tools/benchmark.js [options]
                        game settings (default: the game's own defaults for new players)
   --size WxH           page size in CSS pixels, rendered at 1x (default: 1280x720)
   --scale N            render resolution, as in the launcher (default: 1)
-  --vsync              cap the frame rate at the display's refresh rate (default: uncapped, to see the headroom)
-  --no-profile         only frame times: no CPU profile or trace (their overhead is a few percent)
+  --uncapped           don't cap the frame rate at the display's refresh rate, to see how far above it the game
+                       gets (with software WebGL this floods the GPU process and stalls for seconds)
+  --no-profile         only frame times, without the CPU profiler (which costs some speed)
   --interval US        CPU profile sampling interval in microseconds (default: 1000)
   --browser PATH       Chrome, Edge or Chromium to use (default: found automatically; also $CHROME_PATH)
   --headless           no window (usually software rendering on the CPU, so not representative)
@@ -46,7 +47,7 @@ const HELP = `Usage: node tools/benchmark.js [options]
 
 function parseArgs(argv) {
   const o = {
-    seed: 'benchmark', warmup: 20, idle: 30, walk: 30, size: '1280x720', scale: null, vsync: false, profile: true,
+    seed: 'benchmark', warmup: 20, idle: 30, walk: 30, size: '1280x720', scale: null, uncapped: false, profile: true,
     interval: 1000, browser: process.env.CHROME_PATH || null, headless: false, softwareGl: false,
     dist: path.join(__dirname, '..', 'dist'), out: null, keepOpen: false, timeout: 900, settings: {},
   };
@@ -71,7 +72,7 @@ function parseArgs(argv) {
         o.settings[a.slice(2)] = value(); break;
       case '--size': o.size = value(); break;
       case '--scale': o.scale = number(); break;
-      case '--vsync': o.vsync = true; break;
+      case '--uncapped': o.uncapped = true; break;
       case '--no-profile': o.profile = false; break;
       case '--interval': o.interval = number(); break;
       case '--browser': o.browser = value(); break;
@@ -163,9 +164,10 @@ async function launch(o, url) {
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows', '--disable-features=CalculateNativeWinOcclusion',
-    `--window-size=${o.width + 40},${o.height + 160}`,
+    // Room for the page at its emulated size plus the browser's toolbar.
+    `--window-size=${o.width + (o.headless ? 0 : 40)},${o.height + (o.headless ? 0 : 160)}`,
   ];
-  if (!o.vsync) args.push('--disable-gpu-vsync', '--disable-frame-rate-limit');
+  if (o.uncapped) args.push('--disable-gpu-vsync', '--disable-frame-rate-limit');
   if (o.headless) args.push('--headless=new');
   if (o.softwareGl) args.push('--use-angle=swiftshader', '--enable-unsafe-swiftshader');
   if (process.platform === 'linux' && process.getuid && process.getuid() === 0) args.push('--no-sandbox');
@@ -222,67 +224,6 @@ class Cdp {
     this.listeners.push(listener);
     return () => { this.listeners = this.listeners.filter((l) => l !== listener); };
   }
-}
-
-/** Records a trace of top-level tasks, to tell how busy the page's main thread and the GPU process are. */
-async function startTrace(cdp) {
-  const events = [];
-  let complete;
-  const done = new Promise((resolve) => { complete = resolve; });
-  const off = cdp.on((m) => {
-    if (m.method === 'Tracing.dataCollected') events.push(...m.params.value);
-    if (m.method === 'Tracing.tracingComplete' || m.method === 'closed') complete();
-  });
-  await cdp.send('Tracing.start', {
-    traceConfig: { recordMode: 'recordContinuously', includedCategories: ['toplevel'] }, transferMode: 'ReportEvents',
-  });
-  return async () => {
-    await cdp.send('Tracing.end');
-    await done;
-    off();
-    return threadBusy(events);
-  };
-}
-
-function threadBusy(events) {
-  const processName = new Map();
-  const threadName = new Map();
-  const intervals = new Map();
-  let first = Infinity;
-  let last = -Infinity;
-  for (const e of events) {
-    if (e.ph === 'M' && e.name === 'process_name') processName.set(e.pid, e.args.name);
-    if (e.ph === 'M' && e.name === 'thread_name') threadName.set(e.pid + ':' + e.tid, e.args.name);
-    if (e.ph === 'X' && e.dur > 0) {
-      const k = e.pid + ':' + e.tid;
-      if (!intervals.has(k)) intervals.set(k, []);
-      intervals.get(k).push([e.ts, e.ts + e.dur]);
-      first = Math.min(first, e.ts);
-      last = Math.max(last, e.ts + e.dur);
-    }
-  }
-  if (!intervals.size) return { mainThread: null, gpuProcess: null };
-  const span = last - first;
-  const busy = (k) => {
-    const v = intervals.get(k).sort((a, b) => a[0] - b[0]);
-    let total = 0;
-    let [s, e] = v[0];
-    for (const [a, b] of v.slice(1)) {
-      if (a > e) { total += e - s; s = a; e = b; } else e = Math.max(e, b);
-    }
-    return total + e - s;
-  };
-  // The busiest renderer main thread is the game's page; GPU work is on the GPU process's main thread.
-  let renderer = 0;
-  let gpu = 0;
-  for (const k of intervals.keys()) {
-    const p = processName.get(Number(k.split(':')[0])) || '';
-    const t = threadName.get(k) || '';
-    if (t === 'CrRendererMain' && /Renderer/.test(p)) renderer = Math.max(renderer, busy(k));
-    if (t === 'CrGpuMain') gpu = Math.max(gpu, busy(k));
-  }
-  const pct = (v) => (span > 0 ? Math.round((1000 * v) / span) / 10 : null);
-  return { mainThread: pct(renderer), gpuProcess: pct(gpu) };
 }
 
 // ---- Run --------------------------------------------------------------------------------------------------------
@@ -375,7 +316,8 @@ async function main() {
       if (state && state !== lastState) {
         lastState = state;
         const [s, detail] = state.split('|');
-        console.log('  ' + (s === 'title' ? 'creating the world' : s === 'loading' ? 'loading ' + (detail || '') : s));
+        if (s === 'title') console.log('  creating the world');
+        else if (s === 'loading' && detail) console.log('  loading: ' + detail);
       }
     };
 
@@ -390,7 +332,7 @@ async function main() {
     await send('Page.navigate', { url: pageUrl });
 
     const results = { phases: {}, profiles: {} };
-    let stopTrace = null;
+    const go = (phase) => send('Runtime.evaluate', { expression: `window.__retroBenchmark.go = ${JSON.stringify(phase)}` });
     let inGame = false;
     // Loading may take up to --timeout; once in game, the phases take as long as they were asked to.
     let deadline = Date.now() + o.timeout * 1000;
@@ -405,19 +347,19 @@ async function main() {
       }
       if (ev.type === 'phase') {
         console.log(`  ${ev.phase}: ${ev.seconds} s` + (ev.measured ? '' : ' (not measured)'));
-        if (ev.measured && o.profile) {
-          await send('Profiler.start');
-          stopTrace = await startTrace(cdp);
-        }
+        if (ev.measured && o.profile) await send('Profiler.start');
+        await go(ev.phase);
       }
       if (ev.type === 'phaseEnd' && ev.stats) {
         const phase = { ...ev.stats };
         if (o.profile) {
           const { profile } = await send('Profiler.stop');
-          phase.busy = await stopTrace();
           const file = path.join(outDir, ev.phase + '.cpuprofile');
           fs.writeFileSync(file, JSON.stringify(profile));
-          results.profiles[ev.phase] = report.analyze(profile, symbols);
+          const analysis = report.analyze(profile, symbols);
+          results.profiles[ev.phase] = analysis;
+          phase.mainThreadBusy = analysis.busyPercent;
+          phase.inWebGL = analysis.webglPercent;
         }
         results.phases[ev.phase] = phase;
         console.log(`  ${ev.phase}: ${phase.fps} FPS`);
@@ -433,7 +375,7 @@ async function main() {
     fs.writeFileSync(path.join(outDir, 'report.txt'), text + '\n');
     fs.writeFileSync(path.join(outDir, 'results.json'), JSON.stringify({
       options: { seed: o.seed, warmup: o.warmup, idle: o.idle, walk: o.walk, size: o.size, scale: o.scale,
-        vsync: o.vsync, profile: o.profile, interval: o.interval, headless: o.headless, softwareGl: o.softwareGl,
+        uncapped: o.uncapped, profile: o.profile, interval: o.interval, headless: o.headless, softwareGl: o.softwareGl,
         settings: o.settings },
       environment: { ...results.page, phases: undefined, os: `${os.type()} ${os.release()} ${os.arch()}`,
         cpu: os.cpus()[0] && os.cpus()[0].model, cores: os.cpus().length, memoryGB: Math.round(os.totalmem() / 2 ** 30) },
@@ -458,27 +400,28 @@ function formatReport(o, browser, symbols, r) {
     `${Math.round(os.totalmem() / 2 ** 30)} GB, ${os.type()} ${os.release()}`);
   lines.push(`Browser:   ${version ? version[0] : path.basename(browser.exe)}` +
     `${o.headless ? ', headless' : ''}${o.softwareGl ? ', software WebGL' : ''}` +
-    `, frame rate ${o.vsync ? 'capped at the display refresh rate' : 'uncapped'}`);
+    `, frame rate ${o.uncapped ? 'uncapped' : 'capped at the display refresh rate'}`);
   lines.push(`Canvas:    ${p.canvas} (page ${o.width}x${o.height} at 1x${o.scale != null ? ', render resolution ' + o.scale : ''})`);
   lines.push(`World:     seed "${p.seed}", ${p.settings}`);
   lines.push(`Build:     ${symbols ? 'profile build (function names)' : 'release build (no function names)'}` +
     (o.profile ? `; CPU profiler sampling every ${o.interval} µs during the measured phases` : ''));
   lines.push('');
   const header = ['phase', 'avg FPS', '1% low', 'median ms', 'p95 ms', 'p99 ms', 'entities', 'walked m'];
-  if (o.profile) header.push('main busy', 'GPU busy');
+  if (o.profile) header.push('main busy', 'in WebGL');
   const rows = [header];
   for (const [name, s] of Object.entries(r.phases)) {
     const row = [name, s.fps, s.low1, s.frameMs.p50, s.frameMs.p95, s.frameMs.p99, s.entities ?? '', s.distance ?? ''];
-    if (o.profile) row.push(s.busy && s.busy.mainThread != null ? s.busy.mainThread + '%' : '?',
-      s.busy && s.busy.gpuProcess != null ? s.busy.gpuProcess + '%' : '?');
+    if (o.profile) row.push(s.mainThreadBusy + '%', s.inWebGL + '%');
     rows.push(row.map(String));
   }
   const widths = header.map((_, i) => Math.max(...rows.map((row) => row[i].length)));
   for (const row of rows) lines.push(row.map((c, i) => (i ? c.padStart(widths[i] + 2) : c.padEnd(widths[i]))).join(''));
   if (o.profile) {
     lines.push('');
-    lines.push('main busy: share of time the page\'s main thread (where the game runs) was working. Near 100% means');
-    lines.push('the game code limits the frame rate; well below with a busy GPU process means the GPU/driver does.');
+    lines.push('main busy: share of the time the page\'s main thread (where the game runs) was working rather than waiting');
+    lines.push('for the next frame. Near 100%: the game\'s code limits the frame rate. Well below 100% at the display\'s');
+    lines.push('refresh rate: headroom. Well below it at a lower rate: the GPU limits it. in WebGL: share of the busy');
+    lines.push('time inside WebGL calls, which includes waiting for the GPU.');
   }
   for (const [name, a] of Object.entries(r.profiles)) {
     lines.push('');

@@ -126,6 +126,9 @@ function layer(leaf) {
   return 'Game + mod code';
 }
 
+// WebGL methods (native, so named in every build). Time inside them includes waiting for the GPU process.
+const WEBGL = /^(bufferData|bufferSubData|draw[A-Z]\w*|tex[A-Z]\w*|copyTex\w*|compressedTex\w*|uniform\w+|vertexAttrib\w*|bind[A-Z]\w*|useProgram|enable\w*|disable\w*|blend\w+|depth\w+|stencil\w+|clear\w*|viewport|scissor|colorMask|cullFace|frontFace|polygonOffset|pixelStorei|readPixels|generateMipmap|getError|create[A-Z]\w*|delete[A-Z]\w*|finish|flush|activeTexture|lineWidth|getParameter|getExtension|framebuffer\w+|renderbuffer\w+|checkFramebufferStatus|invalidate\w+|fenceSync|clientWaitSync|getSyncParameter|getUniformLocation|getAttribLocation|readBuffer|blitFramebuffer) \[native\]$/;
+
 function runtimeGroup(leaf) {
   if (/^\$rt_wrapFunction\d/.test(leaf)) return 'Virtual-call trampolines ($rt_wrapFunctionN)';
   if (/^\$rt_(suspending|resuming|nativeThread|invalidPointer)|^TeaVMThread|\$_asyncCall_\$|^org\.teavm\.platform/.test(leaf)) {
@@ -166,6 +169,7 @@ function analyze(profile, symbols) {
   const add = (map, key, t) => map.set(key, (map.get(key) || 0) + t);
   let total = 0;
   let idle = 0;
+  let webgl = 0;
   const { samples, timeDeltas } = profile;
   for (let i = 0; i < samples.length; i++) {
     const t = i + 1 < timeDeltas.length ? timeDeltas[i + 1] : 0;
@@ -178,6 +182,7 @@ function analyze(profile, symbols) {
     add(top, rule[0], t);
     if (rule[2]) add(sub, rule[0] + '\u0000' + pick(rule[2], onStack)[0], t);
     add(self, leaf, t);
+    if (WEBGL.test(leaf)) webgl += t;
     const l = layer(leaf);
     if (l) add(layers, l, t);
     if (l && l.startsWith('TeaVM')) add(runtime, runtimeGroup(leaf), t);
@@ -188,6 +193,7 @@ function analyze(profile, symbols) {
   return {
     seconds: Math.round(total / 1e4) / 100,
     busyPercent: total ? Math.round((1000 * busy) / total) / 10 : 0,
+    webglPercent: pct(webgl),
     named: !!symbols,
     phases: sorted(top).map(([name, t]) => ({
       name,
@@ -205,6 +211,7 @@ function format(a, top = 25) {
   const out = [];
   const row = (indent, name, value) => out.push((' '.repeat(indent) + name).padEnd(58) + (value.toFixed(1) + '%').padStart(7));
   out.push(`Main thread busy ${a.busyPercent}% of ${a.seconds} s (the rest is waiting for the next frame).`);
+  out.push(`Inside WebGL calls: ${a.webglPercent}% of the busy time (includes waiting for the GPU).`);
   if (!a.named) {
     out.push('No function names: this is not a profile build (./gradlew build -PprofileBuild=true).');
   }

@@ -9,7 +9,9 @@
 // render=far|normal|short|tiny, graphics=fancy|fast, smooth=on|off, clouds=on|off,
 // difficulty=peaceful|easy|normal|hard (unset ones keep the game's defaults).
 // Benchmark runs use their own saves and settings, apart from the player's. The results show on the page at the end
-// and are in window.__retroBenchmark.results; tools/benchmark.js is notified of each phase through a DevTools binding.
+// and are in window.__retroBenchmark.results. Under tools/benchmark.js (a DevTools binding named
+// __retroBenchmarkNotify exists) each phase waits until the runner has started its profiler and sets
+// __retroBenchmark.go to the phase's name, so starting and stopping the profiler never falls inside a measurement.
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
@@ -66,6 +68,8 @@
     }
   }, 250);
 
+  var runner = typeof window.__retroBenchmarkNotify === 'function';
+
   function runPhase(index, results) {
     if (index >= phases.length) {
       finish(results);
@@ -73,8 +77,22 @@
     }
     var phase = phases[index];
     B.phase = phase.name;
-    B.walk = phase.walk;
     notify({ type: 'phase', phase: phase.name, seconds: phase.seconds, measured: phase.measured });
+    if (runner && B.go !== phase.name) {
+      show(phase.name + ': waiting for the profiler');
+      var wait = setInterval(function () {
+        if (B.go === phase.name) {
+          clearInterval(wait);
+          measure(index, phase, results);
+        }
+      }, 50);
+    } else {
+      measure(index, phase, results);
+    }
+  }
+
+  function measure(index, phase, results) {
+    B.walk = phase.walk;
     var times = [], entities = [], startX = B.x, startZ = B.z;
     var first = null, last = null, lastSample = 0, lastShown = -1;
     function frame(t) {
@@ -93,6 +111,7 @@
         requestAnimationFrame(frame);
         return;
       }
+      B.walk = false;
       if (phase.measured) {
         var s = frameStats(times);
         s.entities = entities.length ? Math.round(average(entities)) : null;
