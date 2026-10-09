@@ -49,6 +49,15 @@
     background: #0e0e10; border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
   .hidden { display: none !important; }
   .wide { max-width: 760px; }
+  .engine-select { background: #16161b; font-weight: 600; color: #fff; border-color: var(--accent); }
+  .graal-box { margin-top: 14px; background: rgba(15, 20, 15, 0.7); border: 1px solid var(--accent-dark); border-radius: 8px; padding: 14px; }
+  .graal-title { font-weight: 700; font-size: 14px; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .graal-desc { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4; }
+  .graal-run { background: #0a0a0c; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-top: 10px; font-family: monospace; font-size: 11px; color: #a3e635; word-break: break-all; }
+  .btn-graal { display: block; text-align: center; text-decoration: none; width: 100%; box-sizing: border-box; }
+  .feature-list { font-size: 11px; color: var(--muted); margin: 8px 0 10px; padding-left: 16px; }
+  .feature-list li { margin-bottom: 3px; }
+  .feature-list strong { color: var(--text); }
 </style>
 </head>
 <body>
@@ -60,21 +69,45 @@
     <p class="sub">Full Retro modpack · Forge · runs entirely in your browser</p>
     <label for="username">Username</label>
     <input id="username" type="text" maxlength="16" autocomplete="off" spellcheck="false">
-    <label for="scale">Render resolution</label>
-    <select id="scale">
+    <label for="engine">Runtime Engine</label>
+    <select id="engine" class="engine-select">
+      <option value="teavm" selected>TeaVM (In-Browser WebGL)</option>
+      <option value="graalvm">GraalVM Native (High-Performance AOT)</option>
+    </select>
+    <label for="scale" class="teavm-only">Render resolution</label>
+    <select id="scale" class="teavm-only">
       <option value="0.5">50% (fastest)</option>
       <option value="0.75">75%</option>
       <option value="1" selected>100%</option>
       <option value="1.5">150%</option>
       <option value="2">200% (sharpest)</option>
     </select>
-    <label for="proxy">Multiplayer relay (optional)</label>
-    <input id="proxy" type="text" placeholder="ws://localhost:25566" autocomplete="off" spellcheck="false">
-    <button id="play" class="play">Play</button>
+    <label for="proxy" class="teavm-only">Multiplayer relay (optional)</label>
+    <input id="proxy" type="text" placeholder="ws://localhost:25566" autocomplete="off" spellcheck="false" class="teavm-only">
+    <div id="graalvm-options" class="graalvm-only hidden">
+      <div class="graal-box">
+        <div class="graal-title">🚀 GraalVM Standalone Native AOT</div>
+        <p class="graal-desc">Ahead-Of-Time compiled Linux x86_64 ELF binary. Runs with native desktop OpenGL, OpenAL 3D spatial audio, 0s JIT compilation lag, and all 46 mods pre-compiled.</p>
+        <ul class="feature-list">
+          <li><strong>46 Mods Loaded:</strong> IC2, BuildCraft, RedPower 2, EE2, NEI, Forestry, etc.</li>
+          <li><strong>Zero JVM Warmup:</strong> Native SubstrateVM binary with instant startup.</li>
+          <li><strong>Hardware Acceleration:</strong> Native desktop OpenGL with uncapped framerates.</li>
+          <li><strong>Save Compatibility:</strong> Worlds interchange seamlessly between TeaVM &amp; GraalVM.</li>
+        </ul>
+        <a id="download-native" href="mc-retro-graalvm-linux-x64.tar.gz" download class="play btn-graal">Download Standalone Native Bundle (120 MB)</a>
+        <div class="graal-run">
+          tar -xzf mc-retro-graalvm-linux-x64.tar.gz<br>
+          cd mc-retro-graalvm-linux-x64 &amp;&amp; ./run.sh
+        </div>
+      </div>
+    </div>
+    <button id="play" class="play">Play in Browser</button>
     <div class="row">
       <button id="export" class="ghost">Export saves</button>
-      <button id="reset" class="ghost danger">Delete all saves</button>
+      <button id="import-btn" class="ghost">Import save (.zip)</button>
+      <button id="reset" class="ghost danger">Delete saves</button>
     </div>
+    <input id="import-file" type="file" accept=".zip" class="hidden">
     <p class="note">
       Multiplayer: servers that run a relay are added in the game by their <code>wss://</code> address. Any other
       1.2.5 server (<code>host:port</code>) is reached through a relay you run, such as
@@ -115,6 +148,20 @@
   $('username').value = prefs.username || ('Player' + Math.floor(Math.random() * 900 + 100));
   if (prefs.scale) $('scale').value = prefs.scale;
   if (prefs.proxy) $('proxy').value = prefs.proxy;
+  if (prefs.engine) $('engine').value = prefs.engine;
+
+  function updateEngineUI() {
+    var isGraal = $('engine').value === 'graalvm';
+    document.querySelectorAll('.teavm-only').forEach(function (el) { el.classList.toggle('hidden', isGraal); });
+    document.querySelectorAll('.graalvm-only').forEach(function (el) { el.classList.toggle('hidden', !isGraal); });
+    $('play').textContent = isGraal ? 'Download / Launch Native' : 'Play in Browser';
+  }
+  $('engine').addEventListener('change', function () {
+    prefs.engine = $('engine').value;
+    try { localStorage.setItem(STORAGE + ':prefs', JSON.stringify(prefs)); } catch (e) {}
+    updateEngineUI();
+  });
+  updateEngineUI();
 
   function show(id) {
     ['launcher', 'loading', 'failure'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); });
@@ -152,8 +199,15 @@
 
   $('play').addEventListener('click', function () {
     var name = $('username').value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 16) || 'Player';
-    prefs = { username: name, scale: $('scale').value, proxy: $('proxy').value.trim() };
+    prefs = { username: name, scale: $('scale').value, proxy: $('proxy').value.trim(), engine: $('engine').value };
     try { localStorage.setItem(STORAGE + ':prefs', JSON.stringify(prefs)); } catch (e) {}
+
+    if ($('engine').value === 'graalvm') {
+      var dl = $('download-native');
+      if (dl) dl.click();
+      return;
+    }
+
     window.retroConfig = { username: name, resolutionScale: prefs.scale, storageName: STORAGE, proxy: prefs.proxy };
     if (window.__retroAudioResume) window.__retroAudioResume();
     show('loading');
@@ -211,6 +265,55 @@
         document.body.appendChild(a); a.click(); a.remove();
       };
     };
+  });
+
+  $('import-btn').addEventListener('click', function () {
+    $('import-file').click();
+  });
+  $('import-file').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var buf = reader.result;
+      var view = new DataView(buf);
+      var pos = 0;
+      var filesToSave = [];
+      while (pos + 30 <= buf.byteLength) {
+        if (view.getUint32(pos, true) !== 0x04034b50) break;
+        var compMethod = view.getUint16(pos + 8, true);
+        var compSize = view.getUint32(pos + 18, true);
+        var uncompSize = view.getUint32(pos + 22, true);
+        var nameLen = view.getUint16(pos + 26, true);
+        var extraLen = view.getUint16(pos + 28, true);
+        var nameBytes = new Uint8Array(buf, pos + 30, nameLen);
+        var name = new TextDecoder().decode(nameBytes);
+        var dataOffset = pos + 30 + nameLen + extraLen;
+        if (compMethod === 0 && !name.endsWith('/')) {
+          var fileData = new Uint8Array(buf, dataOffset, uncompSize);
+          var normalizedPath = name.startsWith('.minecraft/') ? name : ('.minecraft/saves/' + name);
+          filesToSave.push({ path: '/home/player/' + normalizedPath, type: 'f', data: fileData.slice().buffer });
+        }
+        pos = dataOffset + compSize;
+      }
+      if (!filesToSave.length) {
+        alert('No uncompressed save files found in zip. Please import a zip exported from this launcher or uncompressed save archive.');
+        return;
+      }
+      var req = indexedDB.open(STORAGE, 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore('files', { keyPath: 'path' }); };
+      req.onsuccess = function () {
+        var db = req.result;
+        var tx = db.transaction('files', 'readwrite');
+        var store = tx.objectStore('files');
+        filesToSave.forEach(function (f) { store.put(f); });
+        tx.oncomplete = function () {
+          alert('Successfully imported ' + filesToSave.length + ' save files! Refresh to see imported worlds.');
+        };
+      };
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
   });
 })();
 </script>

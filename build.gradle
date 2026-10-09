@@ -145,6 +145,9 @@ tasks.register('dist', Sync) {
     from('web')
     from(teavmOut)
     from(prepared.map { it.dir('web') })
+    from('build/graalvm') {
+        include 'mc-retro-graalvm-linux-x64.tar.gz'
+    }
     into 'dist'
 }
 
