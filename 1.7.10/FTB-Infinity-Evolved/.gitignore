@@ -1,0 +1,15 @@
+# Fetched by tools/fetch.mjs: Mojang's and the mod authors' files are never committed
+/input/
+/build/
+/dist/
+.gradle/
+node_modules/
+dist-remote/
+run.log
+build-remote.log
+build-iter.log
+# other build outputs and logs (they contain Mojang's and the mod authors' files)
+/dist-*/
+*.log
+/server/
+/*/build/

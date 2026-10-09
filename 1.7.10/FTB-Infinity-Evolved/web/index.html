@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FTB Infinity Evolved – Minecraft 1.7.10</title>
+<style>
+  :root {
+    --bg: #1b1b1f;
+    --panel: rgba(20, 20, 24, 0.92);
+    --text: #e8e8e8;
+    --muted: #a0a0a8;
+    --accent: #6fbf4a;
+    --accent-dark: #4b8a30;
+    --danger: #d9534f;
+    --border: #3a3a42;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none;
+    image-rendering: pixelated; background: #000; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+    background:
+      linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.75)),
+      repeating-linear-gradient(45deg, #3b2a1a 0 12px, #4a3522 12px 24px); }
+  .card { width: 100%; max-width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: .5px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input[type=text], select { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: #111114; color: var(--text); font-size: 15px; }
+  button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid transparent; padding: 11px 16px; }
+  .play { width: 100%; margin-top: 22px; background: var(--accent); color: #0d1a07; font-weight: 700; font-size: 17px; }
+  .play:hover { background: #7fd158; }
+  .row { display: flex; gap: 10px; margin-top: 12px; }
+  .ghost { flex: 1; background: transparent; color: var(--muted); border-color: var(--border); font-size: 13px; }
+  .ghost:hover { color: var(--text); border-color: #5a5a64; }
+  .ghost.danger:hover { color: var(--danger); border-color: var(--danger); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 16px; line-height: 1.5; }
+  .note a { color: var(--accent); }
+  .note code { font-size: 11px; }
+  .bar { height: 8px; background: #111114; border-radius: 4px; overflow: hidden; margin-top: 14px; border: 1px solid var(--border); }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #status { font-size: 15px; margin-top: 4px; }
+  #detail { font-size: 13px; color: var(--muted); min-height: 18px; margin-top: 4px; }
+  pre { white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow: auto; font-size: 12px;
+    background: #0e0e10; border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  .hidden { display: none !important; }
+  .wide { max-width: 760px; }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0" class="hidden"></canvas>
+
+<div id="launcher" class="overlay">
+  <div class="card">
+    <h1>FTB Infinity Evolved</h1>
+    <p class="sub">Minecraft 1.7.10 · Forge · runs entirely in your browser</p>
+    <label for="username">Username</label>
+    <input id="username" type="text" maxlength="16" autocomplete="off" spellcheck="false">
+    <label for="scale">Render resolution</label>
+    <select id="scale">
+      <option value="0.5">50% (fastest)</option>
+      <option value="0.75">75%</option>
+      <option value="1" selected>100%</option>
+      <option value="1.5">150%</option>
+      <option value="2">200% (sharpest)</option>
+    </select>
+    <button id="play" class="play">Play</button>
+    <div class="row">
+      <button id="export" class="ghost">Export saves</button>
+      <button id="reset" class="ghost danger">Delete all saves</button>
+    </div>
+    <p class="note">
+      Worlds and settings are stored in this browser. Click the game to capture the mouse; press Esc to release it.
+      F11 toggles full screen. Not an official Minecraft product; not approved by or associated with Mojang or Microsoft.
+    </p>
+  </div>
+</div>
+
+<div id="loading" class="overlay hidden">
+  <div class="card">
+    <h1>Loading…</h1>
+    <div id="status">Starting</div>
+    <div id="detail"></div>
+    <div class="bar"><div id="progress"></div></div>
+  </div>
+</div>
+
+<div id="failure" class="overlay hidden">
+  <div class="card wide">
+    <h1>Something went wrong</h1>
+    <p class="sub" id="failure-title"></p>
+    <pre id="failure-text"></pre>
+    <button class="ghost" onclick="location.reload()">Reload</button>
+  </div>
+</div>
+
+<script>
+  // Java stack traces are built from JavaScript ones: keep more than V8's default 10 frames
+  Error.stackTraceLimit = 64;
+</script>
+<script src="js/al.js"></script>
+<script>
+(function () {
+  'use strict';
+  var STORAGE = 'minecraft-1.7.10-ftb-infinity-evolved';
+  var $ = function (id) { return document.getElementById(id); };
+  var prefs = {};
+  try { prefs = JSON.parse(localStorage.getItem(STORAGE + ':prefs') || '{}'); } catch (e) {}
+  $('username').value = prefs.username || ('Player' + Math.floor(Math.random() * 900 + 100));
+  if (prefs.scale) $('scale').value = prefs.scale;
+
+  function show(id) {
+    ['launcher', 'loading', 'failure'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); });
+  }
+
+  window.retroLoader = {
+    progress: function (stage, detail, fraction) {
+      $('status').textContent = stage;
+      $('detail').textContent = detail || '';
+      $('progress').style.width = Math.round(Math.max(0, Math.min(1, fraction)) * 100) + '%';
+    },
+    started: function () {
+      show(null);
+      $('game').classList.remove('hidden');
+      $('game').focus();
+    },
+    fail: function (message) {
+      show('failure');
+      $('failure-title').textContent = 'The game could not start.';
+      $('failure-text').textContent = message;
+    },
+    crash: function (report) {
+      show('failure');
+      $('game').classList.add('hidden');
+      if (document.pointerLockElement) document.exitPointerLock();
+      $('failure-title').textContent = 'Minecraft crashed. The report below is also in the browser console.';
+      $('failure-text').textContent = report;
+    }
+  };
+
+  window.addEventListener('error', function (e) {
+    if (!$('launcher').classList.contains('hidden')) return;
+    console.error(e.error || e.message);
+  });
+
+  $('play').addEventListener('click', function () {
+    var name = $('username').value.replace(/[^A-Za-z0-9_]/g, '').slice(0, 16) || 'Player';
+    prefs = { username: name, scale: $('scale').value };
+    try { localStorage.setItem(STORAGE + ':prefs', JSON.stringify(prefs)); } catch (e) {}
+    // ?debuglog=Railcraft,chisel : log everything (down to TRACE) from these loggers, for debugging mods
+    var query = new URLSearchParams(location.search);
+    var debuglog = query.get('debuglog') || '';
+    // ?debugreflect=net.minecraft.potion.Potion : log the field types reflection reports for that class
+    // ?server=wss://... : join that server as soon as the game has loaded
+    window.retroConfig = { username: name, resolutionScale: prefs.scale, storageName: STORAGE, debugLoggers: debuglog,
+                           debugReflect: query.get('debugreflect') || '', server: query.get('server') || '' };
+    if (window.__retroAudioResume) window.__retroAudioResume();
+    show('loading');
+    $('game').classList.remove('hidden');
+    var s = document.createElement('script');
+    s.src = 'classes.js';
+    s.onload = function () {
+      try { main([]); } catch (e) { window.retroLoader.fail(String(e && e.stack || e)); }
+    };
+    s.onerror = function () { window.retroLoader.fail('Could not load classes.js'); };
+    document.body.appendChild(s);
+  });
+
+  $('reset').addEventListener('click', function () {
+    if (!confirm('Delete all worlds, settings and changed configs stored in this browser?')) return;
+    var req = indexedDB.deleteDatabase(STORAGE);
+    req.onsuccess = req.onerror = function () { alert('Saved data deleted.'); };
+  });
+
+  $('export').addEventListener('click', function () {
+    var req = indexedDB.open(STORAGE, 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore('files', { keyPath: 'path' }); };
+    req.onsuccess = function () {
+      var db = req.result;
+      var all = db.transaction('files', 'readonly').objectStore('files').getAll();
+      all.onsuccess = function () {
+        var files = all.result.filter(function (r) { return r.type === 'f'; });
+        if (!files.length) { alert('Nothing saved yet.'); return; }
+        // Simple uncompressed zip of every saved file.
+        var enc = new TextEncoder(), parts = [], central = [], offset = 0;
+        var crcTable = [];
+        for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; crcTable[n] = c >>> 0; }
+        function crc32(u8) { var c = 0xFFFFFFFF; for (var i = 0; i < u8.length; i++) c = crcTable[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+        files.forEach(function (f) {
+          var name = enc.encode(f.path.replace(/^\/home\/player\//, ''));
+          var data = new Uint8Array(f.data), crc = crc32(data);
+          var h = new DataView(new ArrayBuffer(30));
+          h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint32(14, crc, true);
+          h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+          parts.push(new Uint8Array(h.buffer), name, data);
+          var cd = new DataView(new ArrayBuffer(46));
+          cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true);
+          cd.setUint32(16, crc, true); cd.setUint32(20, data.length, true); cd.setUint32(24, data.length, true);
+          cd.setUint16(28, name.length, true); cd.setUint32(42, offset, true);
+          central.push(new Uint8Array(cd.buffer), name);
+          offset += 30 + name.length + data.length;
+        });
+        var cdSize = central.reduce(function (a, b) { return a + b.length; }, 0);
+        var end = new DataView(new ArrayBuffer(22));
+        end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+        end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+        var blob = new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = 'minecraft-saves.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+    };
+  });
+})();
+</script>
+</body>
+</html>

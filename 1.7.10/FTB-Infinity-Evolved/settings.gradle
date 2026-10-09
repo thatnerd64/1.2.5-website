@@ -1,0 +1,2 @@
+rootProject.name = 'ftb-infinity-evolved-web'
+include 'buildtools', 'teavm-plugin', 'runtime', 'gameglue'
