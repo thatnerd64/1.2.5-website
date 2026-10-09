@@ -39,7 +39,7 @@ if [ ! -f "jinput-2.0.5.jar" ]; then
 fi
 if [ ! -f "natives/liblwjgl64.so" ]; then
     curl -sSLO https://repo1.maven.org/maven2/org/lwjgl/lwjgl/lwjgl-platform/2.9.3/lwjgl-platform-2.9.3-natives-linux.jar
-    unzip -qo lwjgl-platform-2.9.3-natives-linux.jar -d natives
+    (cd natives && jar xf ../lwjgl-platform-2.9.3-natives-linux.jar)
 fi
 
 echo "Step 3: Compiling AOT native binary with GraalVM..."
