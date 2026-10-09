@@ -45,6 +45,45 @@ public final class Runtime {
         }
         System.out.println("[Runtime] Minecraft data dir: " + mc.getAbsolutePath());
 
+        // Set Minecraft.aj to mc so Minecraft.b() and FML use our modpack directory
+        try {
+            java.lang.reflect.Field f = Class.forName("net.minecraft.client.Minecraft").getDeclaredField("aj");
+            f.setAccessible(true);
+            f.set(null, mc);
+            System.out.println("[Runtime] Successfully bound Minecraft.aj data directory to: " + mc.getAbsolutePath());
+        } catch (Throwable t) {
+            System.err.println("[Runtime] Note: Could not set Minecraft.aj: " + t);
+        }
+
+        // Set java.home if not set
+        if (System.getProperty("java.home") == null) {
+            String javaHome = System.getenv("JAVA_HOME");
+            if (javaHome != null && !javaHome.isEmpty()) {
+                System.setProperty("java.home", javaHome);
+            } else if (new File("/opt/graalvm").exists()) {
+                System.setProperty("java.home", "/opt/graalvm");
+            }
+        }
+
+        // Set LWJGL and JInput native paths if available
+        File[] searchDirs = new File[] {
+            new File("build/graalvm/lwjgl/natives"),
+            new File("lwjgl/natives"),
+            new File("../build/graalvm/lwjgl/natives")
+        };
+        for (File dir : searchDirs) {
+            if (dir.exists() && dir.isDirectory()) {
+                String abs = dir.getAbsolutePath();
+                if (System.getProperty("org.lwjgl.librarypath") == null) {
+                    System.setProperty("org.lwjgl.librarypath", abs);
+                }
+                if (System.getProperty("net.java.games.input.librarypath") == null) {
+                    System.setProperty("net.java.games.input.librarypath", abs);
+                }
+                break;
+            }
+        }
+
         // Find and load assets.pak
         Path[] assetPaths = new Path[] {
             Paths.get("assets.pak"),

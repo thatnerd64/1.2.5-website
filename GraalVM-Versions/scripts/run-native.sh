@@ -48,8 +48,25 @@ with open(pak_path, 'rb') as f:
 "
 fi
 
-export LD_LIBRARY_PATH="${BUILD_DIR}:${LWJGL_NATIVES}:${LD_LIBRARY_PATH:-}"
+if [ -z "${JAVA_HOME:-}" ]; then
+    if [ -d "/opt/graalvm" ]; then
+        export JAVA_HOME="/opt/graalvm"
+    elif [ -d "/usr/lib/jvm/default-java" ]; then
+        export JAVA_HOME="/usr/lib/jvm/default-java"
+    fi
+fi
+
+JAVA_LIB=""
+if [ -n "${JAVA_HOME:-}" ] && [ -d "${JAVA_HOME}/lib" ]; then
+    JAVA_LIB="${JAVA_HOME}/lib"
+fi
+
+export LD_LIBRARY_PATH="${BUILD_DIR}:${LWJGL_NATIVES}:${JAVA_LIB}:${LD_LIBRARY_PATH:-}"
 
 echo "Starting Minecraft 1.2.5 Full Retro (GraalVM Native)..."
-exec "$BIN" "$@"
+exec "$BIN" \
+    ${JAVA_HOME:+-Djava.home="$JAVA_HOME"} \
+    -Dorg.lwjgl.librarypath="$LWJGL_NATIVES" \
+    -Dnet.java.games.input.librarypath="$LWJGL_NATIVES" \
+    "$@"
 

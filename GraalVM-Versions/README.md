@@ -50,36 +50,46 @@ java.lang.InternalError: Enclosing constructor not found
     at org.graalvm.nativeimage.builder/.../ReflectionDataBuilder.queryGenericInfo(...)
 ```
 * **Cause:** Minecraft 1.2.5 and 2012 Forge mods were obfuscated using legacy ProGuard/Retroguard pipelines that altered or stripped outer constructors without updating the `EnclosingMethod` bytecode attributes of anonymous inner classes (e.g. in `Futures$CombinedFuture$1`, `ic2.common.TileEntityReactorChamber$1`).
-* **Fix:** [`scripts/sanitize-classes.py`](scripts/sanitize-classes.py) dynamically audits all classes against modern JVM reflection APIs, filtering out the 61 malformed inner classes from `reflect-config.json`. This allowed GraalVM to analyze all **18,425 types** and **105,069 methods** cleanly.
+* **Fix:** [`scripts/sanitize-classes.py`](scripts/sanitize-classes.py) dynamically audits all classes against modern JVM reflection APIs, filtering out broken inner classes from `reflect-config.json`. This allowed GraalVM to analyze all **20,370 types** and **147,000+ methods** cleanly.
 
-### 2. AWT & System JNI Binding
-Desktop Minecraft 1.2.5 relies on AWT/Swing (`java.awt.Canvas`, `java.awt.Toolkit`) for the display container before handing off rendering to LWJGL. GraalVM Native Image requires explicit JNI access declarations in [`config/jni-config.json`](config/jni-config.json) for:
-- `java.lang.System.load` / `loadLibrary`
-- `java.awt.GraphicsEnvironment` and `sun.awt.X11GraphicsEnvironment`
-- `org.lwjgl.opengl.Display`, `GL11`, and `Sys`
+### 2. Desktop Compatibility Runtime (`runtime-compat/`)
+The base web project implements a virtual in-memory filesystem and WebGL bridge. For standalone native execution, we built a dedicated pure-JVM desktop compatibility runtime in `GraalVM-Versions/runtime-compat/`:
+- `retro.Runtime`: Binds the Minecraft data directory (`.minecraft`), sets `java.home` and native library paths, and mounts game archives.
+- `retro.rt.Pak`: Pure-JVM binary reader for the RPK2 format used by `assets.pak`, enabling zero-overhead direct `FileChannel` access to game textures, sound effects, and terrain maps without requiring browser virtual filesystem shims.
+- `retro.desktop.DesktopMain`: Clean entrypoint that initializes the runtime before invoking `net.minecraft.client.Minecraft.main()`.
 
-### 3. Web Image vs TeaVM Shims
-The base project's browser compatibility layer (`runtime/`) relies heavily on TeaVM's `@JSBody` annotation:
-```java
-@JSBody(params = { "message" }, script = "console.error(message);")
-public static native void fatal(String message);
+### 3. LWJGL 2.9.3 `libjawt.so` ELF Version Mismatch
+When `Minecraft.run()` initializes the display, LWJGL 2.9.3 calls `System.load("liblwjgl64.so")`. On modern Linux with Java 21, `dlopen` failed with:
 ```
-GraalVM does not interpret TeaVM's `@JSBody` bytecode intrinsic and expects standard JNI linkage. To run fully in the browser via GraalVM Web Image, these shims would need to be re-implemented against GraalVM's `@org.graalvm.webimage.api.JS` interface.
+OSError: .../libjawt.so: version `SUNWprivate_1.1' not found (required by .../liblwjgl64.so)
+```
+* **Cause:** Precompiled `liblwjgl64.so` binaries from 2015 were linked against Java 7/8's `libjawt.so`, which exported `JAWT_GetAWT` under the legacy ELF symbol version `SUNWprivate_1.1`. Modern GraalVM/OpenJDK 21 exports `JAWT_GetAWT` with the base version tag.
+* **Fix:** [`build-native.sh`](scripts/build-native.sh) compiles a forwarding shim shared library with a GNU linker version script defining `SUNWprivate_1.1 { global: JAWT_GetAWT; };`, resolving the symbol requirement and forwarding dynamically to Java's `libjawt.so`.
+
+### 4. Snoop URL Protocol Handler
+Minecraft 1.2.5 initializes its client snoop telemetry reporter (`vt`) during startup with `new URL("http://snoop.minecraft.net/client")`. In GraalVM Native Image, URL stream handlers are stripped by default unless explicitly retained.
+* **Fix:** Enabled via `--enable-url-protocols=http,https` in native-image compilation flags.
+
+### 5. Modpack Discovery & Class Loading
+Forge Mod Loader (FML) discovers mods by inspecting the `mods/` folder and instantiating `mod_*.class` via `cpw.mods.fml.common.ModClassLoader`.
+* Our desktop runtime links `:gameglue:jar` into the native image classpath, which delegates `ModClassLoader.loadClass()` directly to `Class.forName()`.
+* All 46 mods from `fs.pak` are unpacked into `.minecraft/mods`, and `retro.Runtime.boot()` binds `Minecraft.aj` via reflection so FML reliably detects the modpack directory.
+* All 8,818 classes across the modpack, LWJGL, JInput, and AWT are registered in `reflect-config.json` and `jni-config.json`.
 
 ---
 
 ## Build Requirements
 
 - **CPU:** 4+ cores recommended (tested on 88-thread Intel Xeon E5-2696 v4).
-- **RAM:** Minimum 16 GB free RAM (peak RSS during 105k method compilation reaches ~8.5 GB).
-- **JDK:** Oracle GraalVM 21 LTS or Oracle GraalVM 25.
-- **Tools:** `build-essential`, `zlib1g-dev`, and `binaryen` (v119+ for Web Image).
+- **RAM:** Minimum 16 GB free RAM (peak RSS during compilation reaches ~9.5 GB).
+- **JDK:** Oracle GraalVM 21 LTS (`native-image` installed).
+- **Tools:** `build-essential`, `gcc`, `patchelf`, `xvfb` (for headless display testing).
 
 ---
 
 ## Building the Native Binary
 
-1. Run the build script:
+1. Run the end-to-end build script:
    ```bash
    ./GraalVM-Versions/scripts/build-native.sh
    ```
@@ -91,3 +101,4 @@ GraalVM does not interpret TeaVM's `@JSBody` bytecode intrinsic and expects stan
    ```bash
    ./GraalVM-Versions/scripts/run-native.sh
    ```
+   (Or under headless X11: `xvfb-run -a ./GraalVM-Versions/scripts/run-native.sh`)

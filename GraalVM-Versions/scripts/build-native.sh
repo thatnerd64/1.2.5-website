@@ -54,12 +54,49 @@ if [ ! -f "natives/libjinput-linux64.so" ]; then
     (cd natives && jar xf ../jinput-platform-2.0.5-natives-linux.jar)
 fi
 
-echo "Step 3: Compiling desktop compatibility runtime (retro-rt.jar)..."
+echo "Step 3: Building libjawt.so compatibility shim for LWJGL 2.9.3..."
+mkdir -p "$BUILD_DIR/jawt_shim"
+cat << 'EOF' > "$BUILD_DIR/jawt_shim/shim.c"
+#include <dlfcn.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef int (*jawt_fn)(void*, void*);
+static jawt_fn real_fn = 0;
+
+int JAWT_GetAWT(void* env, void* awt) {
+    if (!real_fn) {
+        void* h = NULL;
+        const char* jh = getenv("JAVA_HOME");
+        if (jh) {
+            char buf[512];
+            snprintf(buf, sizeof(buf), "%s/lib/libjawt.so", jh);
+            h = dlopen(buf, RTLD_LAZY | RTLD_GLOBAL);
+        }
+        if (!h) h = dlopen("/opt/graalvm/lib/libjawt.so", RTLD_LAZY | RTLD_GLOBAL);
+        if (!h) h = dlopen("libjawt.so", RTLD_LAZY | RTLD_GLOBAL);
+        if (h) real_fn = (jawt_fn)dlsym(h, "JAWT_GetAWT");
+    }
+    if (real_fn) return real_fn(env, awt);
+    return 0;
+}
+EOF
+cat << 'EOF' > "$BUILD_DIR/jawt_shim/jawt.map"
+SUNWprivate_1.1 {
+    global:
+        JAWT_GetAWT;
+    local:
+        *;
+};
+EOF
+gcc -shared -fPIC -O2 "$BUILD_DIR/jawt_shim/shim.c" -Wl,--version-script="$BUILD_DIR/jawt_shim/jawt.map" -ldl -o "$BUILD_DIR/libjawt.so"
+
+echo "Step 4: Compiling desktop compatibility runtime (retro-rt.jar)..."
 mkdir -p "$BUILD_DIR/compat-classes"
 javac -cp "$GAME_JAR:$GAMEGLUE_JAR" -d "$BUILD_DIR/compat-classes" $(find "$ROOT_DIR/GraalVM-Versions/runtime-compat/src/main/java" -name "*.java")
 jar cf "$BUILD_DIR/retro-rt.jar" -C "$BUILD_DIR/compat-classes" .
 
-echo "Step 4: Compiling AOT native binary with GraalVM..."
+echo "Step 5: Compiling AOT native binary with GraalVM..."
 cd "$BUILD_DIR"
 
 CP="$GAME_JAR:$GAMEGLUE_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
@@ -67,6 +104,7 @@ CP="$GAME_JAR:$GAMEGLUE_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$
 native-image -cp "$CP" \
     -H:ConfigurationFileDirectories="$CONFIG_DIR" \
     -H:+UnlockExperimentalVMOptions \
+    --enable-url-protocols=http,https \
     --report-unsupported-elements-at-runtime \
     --no-fallback \
     retro.desktop.DesktopMain mc-retro-native
