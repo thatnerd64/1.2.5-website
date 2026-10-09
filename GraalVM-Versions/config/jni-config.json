@@ -31,36 +31,7 @@
     ]
   },
   {
-    "name": "java.lang.Class",
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.lang.String",
-    "allDeclaredConstructors": true,
-    "allPublicConstructors": true,
-    "allDeclaredMethods": true,
-    "allPublicMethods": true,
-    "allDeclaredFields": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.lang.Thread",
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.lang.ThreadGroup",
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.nio.ByteBuffer",
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.util.ArrayList",
+    "name": "java.io.IOException",
     "allPublicConstructors": true,
     "allPublicMethods": true,
     "allPublicFields": true
@@ -78,25 +49,13 @@
     "allPublicFields": true
   },
   {
+    "name": "java.lang.Class",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
     "name": "java.lang.Double",
-    "allPublicConstructors": true,
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.lang.Float",
-    "allPublicConstructors": true,
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.lang.Integer",
-    "allPublicConstructors": true,
-    "allPublicMethods": true,
-    "allPublicFields": true
-  },
-  {
-    "name": "java.lang.Long",
     "allPublicConstructors": true,
     "allPublicMethods": true,
     "allPublicFields": true
@@ -108,7 +67,7 @@
     "allPublicFields": true
   },
   {
-    "name": "java.lang.RuntimeException",
+    "name": "java.lang.Float",
     "allPublicConstructors": true,
     "allPublicMethods": true,
     "allPublicFields": true
@@ -126,15 +85,84 @@
     "allPublicFields": true
   },
   {
+    "name": "java.lang.Integer",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.Long",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.OutOfMemoryError",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.RuntimeException",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.Thread",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.ThreadGroup",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
     "name": "java.lang.UnsupportedOperationException",
     "allPublicConstructors": true,
     "allPublicMethods": true,
     "allPublicFields": true
   },
   {
-    "name": "java.io.IOException",
+    "name": "java.math.BigInteger",
     "allPublicConstructors": true,
     "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.nio.ByteBuffer",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.util.ArrayList",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "javax.imageio.IIOException",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "javax.sound.midi.MidiUnavailableException",
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.String",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
     "allPublicFields": true
   },
   {
@@ -885,6 +913,15 @@
     "allPublicFields": true
   },
   {
+    "name": "sun.awt.image.ImageFormatException",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
     "name": "sun.awt.image.IntegerComponentRaster",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
@@ -904,6 +941,15 @@
   },
   {
     "name": "sun.awt.image.BufImgSurfaceData",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.awt.screencast.TokenStorage",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -948,7 +994,205 @@
     "allPublicFields": true
   },
   {
+    "name": "sun.java2d.InvalidPipeException",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
     "name": "sun.java2d.loops.GraphicsPrimitiveMgr",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.Blit",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.BlitBg",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawGlyphList",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawGlyphListAA",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawGlyphListLCD",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawLine",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawParallelogram",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawPath",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawPolygons",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.DrawRect",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.FillParallelogram",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.FillPath",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.FillRect",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.FillSpans",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.MaskBlit",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.MaskFill",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.ScaledBlit",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.loops.TransformHelper",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.opengl.OGLRenderQueue",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.java2d.opengl.OGLSurfaceData",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.CharToGlyphMapper",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -984,6 +1228,15 @@
     "allPublicFields": true
   },
   {
+    "name": "sun.font.Type1Font",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
     "name": "sun.font.FontManager",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
@@ -1003,6 +1256,123 @@
   },
   {
     "name": "sun.font.SunFontManager",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.FontConfigManager$FcCompFont",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.FontConfigManager$FontConfigFont",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.FontConfigManager$FontConfigInfo",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.FontUtilities",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.GlyphLayout$GVData",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.GlyphList",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.PhysicalStrike",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "sun.font.StrikeMetrics",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "javax.sound.sampled.Control",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.sun.media.sound.PortMixer$BoolCtrl",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.sun.media.sound.PortMixer$CompCtrl",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.sun.media.sound.PortMixer$FloatCtrl",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.sun.media.sound.PortMixerProvider$PortMixerInfo",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
@@ -1048,6 +1418,87 @@
   },
   {
     "name": "org.lwjgl.PointerWrapper",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opencl.CLContextCallback",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opencl.CLEventCallback",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opencl.CLMemObjectDestructorCallback",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opencl.CLNativeKernel",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opencl.CLPrintfCallback",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opencl.CLProgramCallback",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opengl.AMDDebugOutputCallback$Handler",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opengl.ARBDebugOutputCallback$Handler",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "org.lwjgl.opengl.KHRDebugCallback$Handler",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,
