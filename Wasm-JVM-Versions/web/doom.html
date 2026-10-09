@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JavaBox Doom — DOOM in the Browser via WASM</title>
+
+  <!-- xterm.js for terminal emulation (boot phase only) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" crossorigin="anonymous" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d0d0d;
+      color: #cdd6f4;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 8px 16px;
+      background: #1a0a0a;
+      border-bottom: 1px solid #3a1515;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #cc3333;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .controls-help {
+      font-size: 11px;
+      color: #666;
+      margin-left: 12px;
+    }
+
+    .controls-help kbd {
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 10px;
+      color: #aaa;
+    }
+
+    #status {
+      margin-left: auto;
+      font-size: 13px;
+      color: #6c7086;
+    }
+    #status.booting { color: #f9e2af; }
+    #status.ready { color: #a6e3a1; }
+    #status.playing { color: #cc3333; }
+    #status.error { color: #f38ba8; }
+
+    #btn-exit {
+      padding: 4px 12px;
+      border: 1px solid #661111;
+      border-radius: 4px;
+      background: #331111;
+      color: #cc6666;
+      cursor: pointer;
+      font-size: 12px;
+      display: none;
+    }
+    #btn-exit:hover { background: #441111; }
+
+    #terminal-container {
+      flex: 1;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #terminal {
+      height: 100%;
+    }
+
+    /* Boot overlay */
+    #boot-progress {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1a0a0a;
+      border: 1px solid #3a1515;
+      border-radius: 12px;
+      padding: 32px 40px;
+      text-align: center;
+      min-width: 340px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+      z-index: 10;
+    }
+
+    #boot-progress h2 {
+      color: #cc3333;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #boot-progress p {
+      color: #6c7086;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: #331111;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #cc3333, #ff6644);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s ease;
+      animation: progress-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes progress-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    #boot-stage {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #45475a;
+    }
+
+    /* Force terminal background black for Doom rendering */
+    .xterm { background: #000 !important; }
+    .xterm-viewport { background: #000 !important; }
+
+    /* Canvas rendering */
+    #doom-canvas-container {
+      display: none;
+      flex: 1;
+      background: #000;
+      overflow: hidden;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #doom-canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>JavaBox Doom</h1>
+  <span class="controls-help">
+    <kbd>Arrows</kbd> Move
+    <kbd>Ctrl</kbd> Fire
+    <kbd>Space</kbd> Use/Open
+    <kbd>Shift</kbd> Run
+    <kbd>1-7</kbd> Weapons
+    <kbd>Esc</kbd> Menu
+  </span>
+  <span id="status" class="booting">Booting...</span>
+  <button id="btn-exit">Exit Doom</button>
+</header>
+
+<div id="terminal-container">
+  <div id="terminal"></div>
+</div>
+
+<div id="doom-canvas-container">
+  <canvas id="doom-canvas" width="320" height="200"></canvas>
+</div>
+
+<!-- Boot progress overlay -->
+<div id="boot-progress">
+  <h2>Loading Doom</h2>
+  <p>Loading JDK 21 + Doom engine directly in your browser.<br>This takes 3&#x2013;5 seconds.</p>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+  <div id="boot-stage">Loading WASM...</div>
+</div>
+
+<!-- xterm.js (no xterm-pty needed for direct WASM mode) -->
+<script src="xterm.js"></script>
+
+<script>
+// ─── Configuration ────────────────────────────────────────────────────────────
+const WASM_BASE_URL = window.location.href.replace(/\/[^/]*$/, '/');
+
+// ─── Cross-Origin Isolation guard ────────────────────────────────────────────
+if (!crossOriginIsolated) {
+  document.getElementById('boot-progress').innerHTML = `
+    <h2 style="color:#f38ba8">Missing Required Headers</h2>
+    <p>JavaBox Doom requires Cross-Origin Isolation (SharedArrayBuffer).<br>
+    Your server must send these HTTP headers:</p>
+    <pre style="text-align:left;background:#111;padding:12px;border-radius:8px;margin-top:12px;font-size:12px">
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp</pre>
+  `;
+  throw new Error('Cross-Origin Isolation required');
+}
+
+const progressFill = document.getElementById('progress-fill');
+const bootStage    = document.getElementById('boot-stage');
+const statusEl     = document.getElementById('status');
+const bootProgress = document.getElementById('boot-progress');
+const btnExit      = document.getElementById('btn-exit');
+
+function setProgress(percent, stage) {
+  progressFill.style.width = percent + '%';
+  bootStage.textContent = stage;
+}
+
+// ─── Terminal (boot phase display) ───────────────────────────────────────────
+const term = new Terminal({
+  theme: {
+    background: '#000000', foreground: '#cccccc', cursor: '#000000',
+    selectionBackground: '#333333',
+  },
+  fontFamily: '"Cascadia Code", "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace',
+  fontSize: 12, lineHeight: 1.0, cursorBlink: false,
+  scrollback: 0,
+  cols: 80,
+  rows: 50,
+});
+term.open(document.getElementById('terminal'));
+window.term = term;
+
+// ─── Key Input ────────────────────────────────────────────────────────────────
+// Maps browser key events to ScanCode ordinals (matching g.Signals.ScanCode enum).
+// Keys are sent directly to a C-side queue via jvm_doom_key_event WASM export.
+// Java's CanvasRenderer polls the queue each frame — no Java thread needed.
+const KEY_MAP = {
+  'ArrowUp':    103,  // SC_UP
+  'ArrowDown':  108,  // SC_DOWN
+  'ArrowLeft':  105,  // SC_LEFT
+  'ArrowRight': 106,  // SC_RIGHT
+  'Enter':       28,  // SC_ENTER
+  'Escape':       1,  // SC_ESCAPE
+  'Space':       57,  // SC_SPACE
+  ' ':           57,  // SC_SPACE
+  'Control':     29,  // SC_LCTRL
+  'Shift':       42,  // SC_LSHIFT
+  'Alt':         56,  // SC_LALT
+  'Tab':         15,  // SC_TAB
+  'Backspace':   14,  // SC_BACKSPACE
+  'F1':  59,  'F2':  60,  'F3':  61,  'F4':  62,
+  'F5':  63,  'F6':  64,  'F7':  65,  'F8':  66,
+  'F9':  67,  'F10': 68,  'F11': 87,  'F12': 88,
+  'Pause': 119,
+  // Number keys (weapon select)
+  '1': 2, '2': 3, '3': 4, '4': 5, '5': 6,
+  '6': 7, '7': 8, '8': 9, '9': 10, '0': 11,
+  // WASD
+  'w': 17, 'W': 17,
+  'a': 30, 'A': 30,
+  's': 31, 'S': 31,
+  'd': 32, 'D': 32,
+  // Other useful keys
+  'y': 21, 'Y': 21,
+  'n': 49, 'N': 49,
+  ',': 51,  // SC_COMMA
+  '.': 52,  // SC_PERIOD
+  '-': 12,  // SC_MINUS
+  '=': 13,  // SC_EQUALS
+};
+
+let doomActive = false;
+
+// ─── Web Audio ─────────────────────────────────────────────────────────────
+let audioCtx = null;
+let nextPlayTime = 0;
+let audioReadIdx = 0;
+
+// sendToGuest — placeholder, overridden once direct WASM module loads
+window.sendToGuest = function(raw) {
+  console.warn('[sendToGuest] Module not initialized yet');
+};
+
+// Post key event directly to C-side queue (no stdin, no Java thread)
+function sendKey(type, scanOrdinal) {
+  if (!doomActive || typeof Module === 'undefined') return;
+  try {
+    Module._jvm_doom_key_event(type, scanOrdinal);
+  } catch(e) { /* Module not ready */ }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!doomActive) return;
+  // Initialize Web Audio on first user gesture
+  if (!audioCtx) {
+    try { audioCtx = new AudioContext({ sampleRate: 22050 }); } catch(ex) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  const sc = KEY_MAP[e.key];
+  if (sc !== undefined) {
+    e.preventDefault();
+    e.stopPropagation();
+    sendKey(1, sc);  // 1 = keydown
+  }
+}, true);
+
+document.addEventListener('keyup', (e) => {
+  if (!doomActive) return;
+  const sc = KEY_MAP[e.key];
+  if (sc !== undefined) {
+    e.preventDefault();
+    e.stopPropagation();
+    sendKey(0, sc);  // 0 = keyup
+  }
+}, true);
+
+// Exit button
+btnExit.addEventListener('click', () => {
+  doomActive = false;
+  btnExit.style.display = 'none';
+  statusEl.textContent = 'Exited';
+  statusEl.className = 'booting';
+});
+
+// ─── Boot monitoring ──────────────────────────────────────────────────────────
+let _ptyRecentText = '';
+let _ptyTotalBytes = 0;
+let _bootPhase = 'loading';
+window._bootPhase = _bootPhase;
+window._ptyRecentText = _ptyRecentText;
+window._ptyTotalBytes = _ptyTotalBytes;
+
+setProgress(10, 'Loading data file...');
+</script>
+
+<script type="module">
+if (!crossOriginIsolated) throw new Error('COI required');
+
+// ─── Boot monitoring ──────────────────────────────────────────────────────────
+function startDoomBootMonitor(sendFn, timeout) {
+  const start = Date.now();
+  let bootDone = false;
+
+  // Send JBOX_PING periodically until we get PONG
+  const pingInterval = setInterval(() => {
+    if (bootDone) { clearInterval(pingInterval); return; }
+    sendFn('JBOX_PING\n');
+  }, 2000);
+
+  // Monitor output for boot detection
+  const checkBoot = setInterval(() => {
+    const text = window._ptyRecentText || '';
+
+    if (!bootDone && text.includes('JBOX_PONG')) {
+      bootDone = true;
+      window._bootPhase = 'ready';
+      statusEl.textContent = 'Starting Doom...';
+      statusEl.className = 'booting';
+      console.log('[DOOM] JBOX_PONG detected, sending JBOX_DOOM command...');
+      setTimeout(() => sendFn('JBOX_DOOM\n'), 500);
+    }
+
+    if (bootDone && text.includes('JBOX_DOOM_START')) {
+      clearInterval(checkBoot);
+      clearInterval(pingInterval);
+      doomActive = true;
+      window._bootPhase = 'playing';
+      statusEl.textContent = 'Playing';
+      statusEl.className = 'playing';
+      btnExit.style.display = 'inline-block';
+      console.log('[DOOM] JBOX_DOOM_START detected! Game is running.');
+
+      if (typeof window._startCanvasRendering === 'function') {
+        window._startCanvasRendering();
+      }
+    }
+
+    if (Date.now() - start > timeout) {
+      clearInterval(checkBoot);
+      clearInterval(pingInterval);
+      statusEl.textContent = 'Boot timeout';
+      statusEl.className = 'error';
+    }
+  }, 500);
+}
+
+// ─── Direct WASM bootstrap ──────────────────────────────────────────────────
+try {
+  setProgress(20, 'Streaming WASM compilation...');
+  // Start streaming compilation immediately — browser compiles while downloading
+  const wasmPromise = WebAssembly.compileStreaming(fetch('./javabox-direct.wasm'));
+
+  setProgress(30, 'Loading JVM module...');
+  const { default: createModule } = await import('./javabox-direct.mjs');
+
+  const directModule = {
+    print(text) {
+      _ptyTotalBytes += text.length;
+      _ptyRecentText = (_ptyRecentText + text + '\n').slice(-8000);
+      window._ptyRecentText = _ptyRecentText;
+      window._ptyTotalBytes = _ptyTotalBytes;
+      console.log('[JVM]', text);
+    },
+    printErr(text) {
+      // Log ALL errors to help debug black screen issues
+      console.warn('[JVM:err]', text);
+    },
+    onExit(code) {
+      bootProgress.style.display = 'none';
+      statusEl.textContent = 'Exited (' + code + ')';
+      statusEl.className = code === 0 ? 'ready' : 'error';
+    },
+  };
+
+  setProgress(50, 'Waiting for WASM compilation...');
+  const compiledWasm = await wasmPromise;
+
+  // Pass pre-compiled module to Emscripten — avoids double download
+  directModule.instantiateWasm = function(imports, callback) {
+    WebAssembly.instantiate(compiledWasm, imports).then(instance => {
+      callback(instance, compiledWasm);
+    });
+    return {};
+  };
+
+  setProgress(60, 'Initializing JVM...');
+  const Module = await createModule(directModule);
+  window.Module = Module;  // Expose for diagnostics/testing
+
+  // Enable ring buffer stdin (bypasses Emscripten's FS proxy for fd 0)
+  Module.ccall('jvm_enable_ring_buffer_stdin', null, [], []);
+
+  // Override sendToGuest — use stdin ring buffer bridge
+  window.sendToGuest = function(raw) {
+    Module.ccall('jvm_stdin_write_string', null, ['string'], [raw]);
+  };
+
+  setProgress(90, 'Waiting for CompileServer...');
+  bootProgress.style.display = 'none';
+  statusEl.textContent = 'Starting JVM...';
+  statusEl.className = 'booting';
+  window._bootPhase = 'booting';
+
+  // Canvas rendering setup
+  const doomCanvas = document.getElementById('doom-canvas');
+  const doomCtx = doomCanvas.getContext('2d');
+  let lastFrameSeq = 0;
+
+  function resizeDoomCanvas() {
+    const container = document.getElementById('doom-canvas-container');
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    // Scale 320x200 to fit container, preserving aspect ratio (8:5)
+    const scaleX = cw / 320;
+    const scaleY = ch / 200;
+    const scale = Math.min(scaleX, scaleY);
+    doomCanvas.style.width = Math.floor(320 * scale) + 'px';
+    doomCanvas.style.height = Math.floor(200 * scale) + 'px';
+  }
+
+  // ─── Audio playback ─────────────────────────────────────────────────────
+  function playAudioChunk(ptr, byteLength) {
+    const samples = byteLength / 4;  // 1050 stereo samples (2 ch × 2 bytes)
+    const buffer = audioCtx.createBuffer(2, samples, 22050);
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+    const heap = Module.HEAPU8;
+    for (let i = 0; i < samples; i++) {
+      const base = ptr + i * 4;
+      // Big-endian 16-bit signed stereo → float32
+      let l = (heap[base] << 8) | heap[base + 1];
+      let r = (heap[base + 2] << 8) | heap[base + 3];
+      if (l >= 32768) l -= 65536;
+      if (r >= 32768) r -= 65536;
+      left[i] = l / 32768.0;
+      right[i] = r / 32768.0;
+    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    if (nextPlayTime < now) nextPlayTime = now + 0.02;
+    source.start(nextPlayTime);
+    nextPlayTime += samples / 22050;
+  }
+
+  function pollAudio() {
+    if (!audioCtx || audioCtx.state !== 'running') return;
+    if (typeof Module._jvm_audio_write_idx !== 'function') return;
+    const writeIdx = Module._jvm_audio_write_idx();
+    const ringChunks = Module._jvm_audio_ring_chunks();
+    const chunkSize = Module._jvm_audio_chunk_size();
+    const ringPtr = Module._jvm_audio_ring_ptr();
+    // If we've fallen too far behind, skip ahead to avoid a burst
+    if (writeIdx - audioReadIdx > ringChunks) {
+      audioReadIdx = writeIdx - 2;
+      nextPlayTime = 0;  // Reset scheduling
+    }
+    while (audioReadIdx < writeIdx) {
+      const idx = audioReadIdx % ringChunks;
+      const ptr = ringPtr + idx * chunkSize;
+      playAudioChunk(ptr, chunkSize);
+      audioReadIdx++;
+    }
+  }
+
+  function startCanvasRendering() {
+    // Switch UI: hide terminal, show canvas
+    document.getElementById('terminal-container').style.display = 'none';
+    const canvasContainer = document.getElementById('doom-canvas-container');
+    canvasContainer.style.display = 'flex';
+    resizeDoomCanvas();
+    window.addEventListener('resize', resizeDoomCanvas);
+
+    // Start rendering loop
+    let renderFrameCount = 0;
+
+    // Diagnostic: log frame_seq every 2 seconds to detect stuck DoomLoop
+    const diagInterval = setInterval(() => {
+      if (!doomActive) return;
+      const seq = Module._jvm_doom_frame_seq();
+      console.log(`[DOOM:diag] frame_seq=${seq} rendered=${renderFrameCount} lastSeq=${lastFrameSeq}`);
+      if (seq === 0 && renderFrameCount === 0) {
+        console.warn('[DOOM:diag] No frames after canvas start — DoomLoop thread may be stuck');
+      }
+    }, 2000);
+
+    function renderLoop() {
+      if (!doomActive) {
+        clearInterval(diagInterval);
+        return;
+      }
+
+      try {
+        // Poll audio ring buffer
+        pollAudio();
+      } catch(e) { /* ignore audio errors */ }
+
+      try {
+        const seq = Module._jvm_doom_frame_seq();
+        if (seq > lastFrameSeq) {
+          if (lastFrameSeq === 0) {
+            console.log('[DOOM] First frame received! seq=' + seq);
+            clearInterval(diagInterval);
+          }
+          lastFrameSeq = seq;
+          renderFrameCount++;
+
+          const ptr = Module._jvm_doom_frame_ptr();
+          const w = Module._jvm_doom_frame_width();
+          const h = Module._jvm_doom_frame_height();
+
+          if (ptr && w > 0 && h > 0) {
+            // Resize canvas if dimensions changed
+            if (doomCanvas.width !== w || doomCanvas.height !== h) {
+              doomCanvas.width = w;
+              doomCanvas.height = h;
+              resizeDoomCanvas();
+            }
+
+            // Read RGBA pixels from shared WASM heap.
+            // Create a fresh view each frame — with ALLOW_MEMORY_GROWTH,
+            // Module.HEAPU8 is reassigned when memory grows, so we always
+            // access it directly rather than caching a reference.
+            const heap = Module.HEAPU8;
+            const pixelData = heap.subarray(ptr, ptr + w * h * 4);
+            const imageData = new ImageData(
+              new Uint8ClampedArray(pixelData), w, h
+            );
+            doomCtx.putImageData(imageData, 0, 0);
+          }
+        }
+      } catch(e) {
+        // Don't let render errors kill the loop — memory growth can
+        // temporarily invalidate HEAPU8 or exported function references
+        if (renderFrameCount === 0) {
+          console.warn('[DOOM] Render error (will retry):', e.message);
+        }
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    requestAnimationFrame(renderLoop);
+    console.log('[DOOM] Canvas rendering started');
+  }
+
+  // Store startCanvasRendering for the boot monitor to call
+  window._startCanvasRendering = startCanvasRendering;
+
+  startDoomBootMonitor(window.sendToGuest, 180000);
+
+} catch (err) {
+  statusEl.textContent = 'Error';
+  statusEl.className = 'error';
+  console.error('[JavaBox Doom] boot error:', err);
+}
+</script>
+
+</body>
+</html>

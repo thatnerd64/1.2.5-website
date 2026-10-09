@@ -1,0 +1,6 @@
+# Ignore heavy binary runtime images (>10MB)
+web/*.wasm
+web/*.data
+runtime/*.wasm
+runtime/*.data
+*.jar
