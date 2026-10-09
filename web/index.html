@@ -73,7 +73,6 @@
     <select id="engine" class="engine-select">
       <option value="teavm" selected>TeaVM (In-Browser WebGL)</option>
       <option value="graalvm">GraalVM Native (High-Performance AOT)</option>
-      <option value="wasmjvm">OpenJDK Zero (In-Browser Wasm JVM)</option>
     </select>
     <label for="scale" class="teavm-only">Render resolution</label>
     <select id="scale" class="teavm-only">
@@ -99,22 +98,6 @@
         <div class="graal-run">
           tar -xzf mc-retro-graalvm-linux-x64.tar.gz<br>
           cd mc-retro-graalvm-linux-x64 &amp;&amp; ./run.sh
-        </div>
-      </div>
-    </div>
-    <div id="wasmjvm-options" class="wasmjvm-only hidden">
-      <div class="graal-box">
-        <div class="graal-title">☕ OpenJDK 21 Zero (In-Browser Wasm JVM)</div>
-        <p class="graal-desc">Real OpenJDK 21 bytecode interpreter compiled directly to WebAssembly via Emscripten. Runs unmodified Java bytecode, full OpenJDK classlibs, reflection, and dynamic classloaders right in your browser!</p>
-        <ul class="feature-list">
-          <li><strong>100% Complete Classlib:</strong> Real java.lang, java.util, java.io, and reflection.</li>
-          <li><strong>Dynamic Classloader:</strong> Native URLClassLoader support for Forge mods.</li>
-          <li><strong>In-Browser Demos:</strong> Interactive Java IDE / Terminal and graphical Mocha Doom in Wasm.</li>
-        </ul>
-        <div class="row" style="margin-top: 10px; gap: 8px;">
-          <a href="/jvm/index.html" target="_blank" class="play btn-graal" style="text-decoration:none; display:inline-block; font-size:13px; padding:8px 14px;">Open Wasm JVM Portal &rarr;</a>
-          <a href="/jvm/editor.html" target="_blank" class="ghost" style="text-decoration:none; display:inline-block; font-size:13px; padding:8px 14px;">Java IDE &rarr;</a>
-          <a href="/jvm/doom.html" target="_blank" class="ghost" style="text-decoration:none; display:inline-block; font-size:13px; padding:8px 14px;">Play Doom &rarr;</a>
         </div>
       </div>
     </div>
@@ -168,20 +151,10 @@
   if (prefs.engine) $('engine').value = prefs.engine;
 
   function updateEngineUI() {
-    var engine = $('engine').value;
-    var isGraal = engine === 'graalvm';
-    var isWasm = engine === 'wasmjvm';
-    var isTea = engine === 'teavm';
-    document.querySelectorAll('.teavm-only').forEach(function (el) { el.classList.toggle('hidden', !isTea); });
+    var isGraal = $('engine').value === 'graalvm';
+    document.querySelectorAll('.teavm-only').forEach(function (el) { el.classList.toggle('hidden', isGraal); });
     document.querySelectorAll('.graalvm-only').forEach(function (el) { el.classList.toggle('hidden', !isGraal); });
-    document.querySelectorAll('.wasmjvm-only').forEach(function (el) { el.classList.toggle('hidden', !isWasm); });
-    if (isGraal) {
-      $('play').textContent = 'Download / Launch Native';
-    } else if (isWasm) {
-      $('play').textContent = 'Launch In-Browser Wasm JVM';
-    } else {
-      $('play').textContent = 'Play in Browser';
-    }
+    $('play').textContent = isGraal ? 'Download / Launch Native' : 'Play in Browser';
   }
   $('engine').addEventListener('change', function () {
     prefs.engine = $('engine').value;
@@ -232,11 +205,6 @@
     if ($('engine').value === 'graalvm') {
       var dl = $('download-native');
       if (dl) dl.click();
-      return;
-    }
-
-    if ($('engine').value === 'wasmjvm') {
-      window.open('/jvm/index.html', '_blank');
       return;
     }
 
