@@ -49,19 +49,24 @@ if [ ! -f "natives/libjinput-linux64.so" ]; then
     (cd natives && jar xf ../jinput-platform-2.0.5-natives-linux.jar)
 fi
 
-echo "Step 3: Compiling AOT native binary with GraalVM..."
-mkdir -p "$BUILD_DIR"
+echo "Step 3: Compiling desktop compatibility runtime (retro-rt.jar)..."
+mkdir -p "$BUILD_DIR/compat-classes"
+javac -cp "$GAME_JAR" -d "$BUILD_DIR/compat-classes" $(find "$ROOT_DIR/GraalVM-Versions/runtime-compat/src/main/java" -name "*.java")
+jar cf "$BUILD_DIR/retro-rt.jar" -C "$BUILD_DIR/compat-classes" .
+
+echo "Step 4: Compiling AOT native binary with GraalVM..."
 cd "$BUILD_DIR"
 
-CP="$GAME_JAR:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
+CP="$GAME_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
 
 native-image -cp "$CP" \
     -H:ConfigurationFileDirectories="$CONFIG_DIR" \
     -H:+UnlockExperimentalVMOptions \
     --report-unsupported-elements-at-runtime \
     --no-fallback \
-    net.minecraft.client.Minecraft mc-retro-native
+    retro.desktop.DesktopMain mc-retro-native
 
 echo "=== Build Complete! Executable produced at: $BUILD_DIR/mc-retro-native ==="
 echo "To run:"
-echo "  LD_LIBRARY_PATH=\"$BUILD_DIR:$LWJGL_DIR/natives\" $BUILD_DIR/mc-retro-native"
+echo "  $ROOT_DIR/GraalVM-Versions/scripts/run-native.sh"
+
