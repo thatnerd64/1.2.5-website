@@ -54,7 +54,28 @@ if [ ! -f "natives/libjinput-linux64.so" ]; then
     (cd natives && jar xf ../jinput-platform-2.0.5-natives-linux.jar)
 fi
 
-echo "Step 3: Building libjawt.so compatibility shim for LWJGL 2.9.3..."
+echo "Step 3: Compiling desktop compatibility runtime (retro-rt.jar)..."
+mkdir -p "$BUILD_DIR/compat-classes"
+javac -cp "$GAME_JAR:$GAMEGLUE_JAR" -d "$BUILD_DIR/compat-classes" $(find "$ROOT_DIR/GraalVM-Versions/runtime-compat/src/main/java" -name "*.java")
+jar cf "$BUILD_DIR/retro-rt.jar" -C "$BUILD_DIR/compat-classes" .
+
+echo "Step 4: Compiling AOT native binary with GraalVM..."
+cd "$BUILD_DIR"
+
+CP="$GAME_JAR:$GAMEGLUE_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
+
+native-image -cp "$CP" \
+    -H:ConfigurationFileDirectories="$CONFIG_DIR" \
+    -H:+UnlockExperimentalVMOptions \
+    --enable-url-protocols=http,https \
+    --report-unsupported-elements-at-runtime \
+    --no-fallback \
+    retro.desktop.DesktopMain mc-retro-native
+
+echo "Step 5: Applying libjawt.so compatibility shim for LWJGL 2.9.3..."
+if [ -f "$BUILD_DIR/libjawt.so" ]; then
+    cp "$BUILD_DIR/libjawt.so" "$BUILD_DIR/libjawt_real.so"
+fi
 mkdir -p "$BUILD_DIR/jawt_shim"
 cat << 'EOF' > "$BUILD_DIR/jawt_shim/shim.c"
 #include <dlfcn.h>
@@ -66,11 +87,10 @@ static jawt_fn real_fn = 0;
 
 int JAWT_GetAWT(void* env, void* awt) {
     if (!real_fn) {
-        void* h = NULL;
-        const char* jh = getenv("JAVA_HOME");
-        if (jh) {
+        void* h = dlopen("libjawt_real.so", RTLD_LAZY | RTLD_GLOBAL);
+        if (!h && getenv("JAVA_HOME")) {
             char buf[512];
-            snprintf(buf, sizeof(buf), "%s/lib/libjawt.so", jh);
+            snprintf(buf, sizeof(buf), "%s/lib/libjawt.so", getenv("JAVA_HOME"));
             h = dlopen(buf, RTLD_LAZY | RTLD_GLOBAL);
         }
         if (!h) h = dlopen("/opt/graalvm/lib/libjawt.so", RTLD_LAZY | RTLD_GLOBAL);
@@ -90,24 +110,6 @@ SUNWprivate_1.1 {
 };
 EOF
 gcc -shared -fPIC -O2 "$BUILD_DIR/jawt_shim/shim.c" -Wl,--version-script="$BUILD_DIR/jawt_shim/jawt.map" -ldl -o "$BUILD_DIR/libjawt.so"
-
-echo "Step 4: Compiling desktop compatibility runtime (retro-rt.jar)..."
-mkdir -p "$BUILD_DIR/compat-classes"
-javac -cp "$GAME_JAR:$GAMEGLUE_JAR" -d "$BUILD_DIR/compat-classes" $(find "$ROOT_DIR/GraalVM-Versions/runtime-compat/src/main/java" -name "*.java")
-jar cf "$BUILD_DIR/retro-rt.jar" -C "$BUILD_DIR/compat-classes" .
-
-echo "Step 5: Compiling AOT native binary with GraalVM..."
-cd "$BUILD_DIR"
-
-CP="$GAME_JAR:$GAMEGLUE_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
-
-native-image -cp "$CP" \
-    -H:ConfigurationFileDirectories="$CONFIG_DIR" \
-    -H:+UnlockExperimentalVMOptions \
-    --enable-url-protocols=http,https \
-    --report-unsupported-elements-at-runtime \
-    --no-fallback \
-    retro.desktop.DesktopMain mc-retro-native
 
 echo "=== Build Complete! Executable produced at: $BUILD_DIR/mc-retro-native ==="
 echo "To run:"
