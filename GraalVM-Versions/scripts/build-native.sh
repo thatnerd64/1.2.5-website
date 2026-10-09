@@ -37,16 +37,23 @@ fi
 if [ ! -f "jinput-2.0.5.jar" ]; then
     curl -sSLO https://repo1.maven.org/maven2/net/java/jinput/jinput/2.0.5/jinput-2.0.5.jar
 fi
+if [ ! -f "jutils-1.0.0.jar" ]; then
+    curl -sSLO https://repo1.maven.org/maven2/net/java/jutils/jutils/1.0.0/jutils-1.0.0.jar
+fi
 if [ ! -f "natives/liblwjgl64.so" ]; then
     curl -sSLO https://repo1.maven.org/maven2/org/lwjgl/lwjgl/lwjgl-platform/2.9.3/lwjgl-platform-2.9.3-natives-linux.jar
     (cd natives && jar xf ../lwjgl-platform-2.9.3-natives-linux.jar)
+fi
+if [ ! -f "natives/libjinput-linux64.so" ]; then
+    curl -sSLO https://repo1.maven.org/maven2/net/java/jinput/jinput-platform/2.0.5/jinput-platform-2.0.5-natives-linux.jar
+    (cd natives && jar xf ../jinput-platform-2.0.5-natives-linux.jar)
 fi
 
 echo "Step 3: Compiling AOT native binary with GraalVM..."
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-CP="$GAME_JAR:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar"
+CP="$GAME_JAR:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
 
 native-image -cp "$CP" \
     -H:ConfigurationFileDirectories="$CONFIG_DIR" \
