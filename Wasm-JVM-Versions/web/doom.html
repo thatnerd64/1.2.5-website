@@ -374,7 +374,7 @@ function startDoomBootMonitor(sendFn, timeout) {
       setTimeout(() => sendFn('JBOX_DOOM\n'), 500);
     }
 
-    if (bootDone && text.includes('JBOX_DOOM_START')) {
+    if (bootDone && (text.includes('JBOX_DOOM_START') || text.includes('R_Init'))) {
       clearInterval(checkBoot);
       clearInterval(pingInterval);
       doomActive = true;
@@ -382,7 +382,7 @@ function startDoomBootMonitor(sendFn, timeout) {
       statusEl.textContent = 'Playing';
       statusEl.className = 'playing';
       btnExit.style.display = 'inline-block';
-      console.log('[DOOM] JBOX_DOOM_START detected! Game is running.');
+      console.log('[DOOM] Doom engine started! Game is running.');
 
       if (typeof window._startCanvasRendering === 'function') {
         window._startCanvasRendering();
