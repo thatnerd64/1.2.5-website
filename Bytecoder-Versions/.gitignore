@@ -1,0 +1,8 @@
+# Bytecoder build artifacts and binaries
+tools/*.jar
+lib/*.jar
+**/bin/
+**/dist/
+*.wasm
+*.wat
+*.class
