@@ -1,0 +1,27 @@
+{
+  "resources": {
+    "includes": [
+      { "pattern": ".*\\.png$" },
+      { "pattern": ".*\\.txt$" },
+      { "pattern": ".*\\.properties$" },
+      { "pattern": ".*\\.lang$" },
+      { "pattern": ".*\\.ogg$" },
+      { "pattern": ".*\\.info$" },
+      { "pattern": ".*\\.json$" },
+      { "pattern": "lang/.*" },
+      { "pattern": "title/.*" },
+      { "pattern": "gui/.*" },
+      { "pattern": "font/.*" },
+      { "pattern": "mob/.*" },
+      { "pattern": "item/.*" },
+      { "pattern": "misc/.*" },
+      { "pattern": "terrain.*" },
+      { "pattern": "paulscode/.*" },
+      { "pattern": "buildcraft/.*" },
+      { "pattern": "ic2/.*" },
+      { "pattern": "redpower/.*" },
+      { "pattern": "forestry/.*" },
+      { "pattern": "railcraft/.*" }
+    ]
+  }
+}
