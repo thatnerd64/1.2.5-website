@@ -16,11 +16,16 @@ fi
 
 echo "Step 1: Preparing game bytecode via gradle..."
 cd "$ROOT_DIR"
-./gradlew prepareGame
+./gradlew prepareGame :gameglue:jar
 
 GAME_JAR="$ROOT_DIR/build/prepared/game.jar"
+GAMEGLUE_JAR="$ROOT_DIR/gameglue/build/libs/gameglue.jar"
 if [ ! -f "$GAME_JAR" ]; then
     echo "Error: $GAME_JAR was not generated."
+    exit 1
+fi
+if [ ! -f "$GAMEGLUE_JAR" ]; then
+    echo "Error: $GAMEGLUE_JAR was not generated."
     exit 1
 fi
 
@@ -51,13 +56,13 @@ fi
 
 echo "Step 3: Compiling desktop compatibility runtime (retro-rt.jar)..."
 mkdir -p "$BUILD_DIR/compat-classes"
-javac -cp "$GAME_JAR" -d "$BUILD_DIR/compat-classes" $(find "$ROOT_DIR/GraalVM-Versions/runtime-compat/src/main/java" -name "*.java")
+javac -cp "$GAME_JAR:$GAMEGLUE_JAR" -d "$BUILD_DIR/compat-classes" $(find "$ROOT_DIR/GraalVM-Versions/runtime-compat/src/main/java" -name "*.java")
 jar cf "$BUILD_DIR/retro-rt.jar" -C "$BUILD_DIR/compat-classes" .
 
 echo "Step 4: Compiling AOT native binary with GraalVM..."
 cd "$BUILD_DIR"
 
-CP="$GAME_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
+CP="$GAME_JAR:$GAMEGLUE_JAR:$BUILD_DIR/retro-rt.jar:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_DIR/jinput-2.0.5.jar:$LWJGL_DIR/jutils-1.0.0.jar"
 
 native-image -cp "$CP" \
     -H:ConfigurationFileDirectories="$CONFIG_DIR" \
