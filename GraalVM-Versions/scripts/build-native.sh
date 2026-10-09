@@ -51,6 +51,7 @@ CP="$GAME_JAR:$LWJGL_DIR/lwjgl-2.9.3.jar:$LWJGL_DIR/lwjgl_util-2.9.3.jar:$LWJGL_
 native-image -cp "$CP" \
     -H:ConfigurationFileDirectories="$CONFIG_DIR" \
     -H:+UnlockExperimentalVMOptions \
+    --report-unsupported-elements-at-runtime \
     --no-fallback \
     net.minecraft.client.Minecraft mc-retro-native
 

@@ -1,20 +1,38 @@
 [
   {
     "name": "java.lang.System",
-    "allDeclaredConstructors": true,
-    "allPublicConstructors": true,
-    "allDeclaredMethods": true,
-    "allPublicMethods": true,
-    "allDeclaredFields": true,
-    "allPublicFields": true
+    "methods": [
+      {
+        "name": "load",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "loadLibrary",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "getProperty",
+        "parameterTypes": [
+          "java.lang.String"
+        ]
+      },
+      {
+        "name": "currentTimeMillis",
+        "parameterTypes": []
+      },
+      {
+        "name": "nanoTime",
+        "parameterTypes": []
+      }
+    ]
   },
   {
     "name": "java.lang.Class",
-    "allDeclaredConstructors": true,
-    "allPublicConstructors": true,
-    "allDeclaredMethods": true,
     "allPublicMethods": true,
-    "allDeclaredFields": true,
     "allPublicFields": true
   },
   {
@@ -28,20 +46,12 @@
   },
   {
     "name": "java.lang.Thread",
-    "allDeclaredConstructors": true,
-    "allPublicConstructors": true,
-    "allDeclaredMethods": true,
     "allPublicMethods": true,
-    "allDeclaredFields": true,
     "allPublicFields": true
   },
   {
     "name": "java.lang.ThreadGroup",
-    "allDeclaredConstructors": true,
-    "allPublicConstructors": true,
-    "allDeclaredMethods": true,
     "allPublicMethods": true,
-    "allDeclaredFields": true,
     "allPublicFields": true
   },
   {
